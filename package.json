@@ -51,7 +51,7 @@
 		"check-biome": "biome check --error-on-warnings --staged --no-errors-on-unmatched",
 		"check-types": "tsc --noEmit",
 		"clean": "rm -rf .next",
-		"dev": "NODE_OPTIONS='--enable-source-maps' next dev",
+		"dev": "next dev",
 		"postinstall": "next telemetry disable",
 		"start": "next start"
 	},
