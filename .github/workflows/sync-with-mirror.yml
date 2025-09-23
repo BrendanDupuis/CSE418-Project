@@ -25,5 +25,5 @@ jobs:
           git remote add watjurk git@github.com:watjurk/CSE418-Project-mirror.git
           git config --global user.email "watjurk@gmail.com"
           git config --global user.name "Wiktor Jurkiewicz"
-          git commit --allow-empty -m "vercel force commit"
+          git commit --allow-empty -m "sync force commit"
           git push watjurk ${{ github.ref_name }} --force
