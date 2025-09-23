@@ -1,0 +1,29 @@
+name: Synchronize this repository with watjurk mirror
+
+on:
+  push:
+    branches: ["*"]
+
+jobs:
+  sync-with-vercel:
+    runs-on: ubuntu-latest
+    if: github.repository == 'BrendanDupuis/CSE418-Project'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          fetch-depth: 0
+      - name: Push to watjurk mirror repo
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.WATJURK_MIRROR_PERSONAL_PRIVATE_SSH_KEY }}
+        run: |
+          mkdir --parents "$HOME/.ssh"
+          DEPLOY_KEY_FILE="$HOME/.ssh/id_ed25519"
+          echo "${SSH_DEPLOY_KEY}" > "$DEPLOY_KEY_FILE"
+          chmod 600 $HOME/.ssh/id_ed25519
+
+          git remote add watjurk git@github.com:watjurk/CSE418-Project-mirror.git
+          git config --global user.email "watjurk@gmail.com"
+          git config --global user.name "Wiktor Jurkiewicz"
+          git commit --allow-empty -m "vercel force commit"
+          git push watjurk ${{ github.ref_name }} --force
