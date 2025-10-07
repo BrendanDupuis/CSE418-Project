@@ -23,7 +23,9 @@ export function EmailVerification({ oobCode }: Props) {
 
 			try {
 				await applyActionCode(firebaseAuth, code);
-				setOk("Email verified successfully! You can now go to the home page.");
+				setOk(
+					"Email verified successfully! You can now go to the sing in page.",
+				);
 			} catch (e: unknown) {
 				let message = "Failed to verify email.";
 				if (typeof e === "object" && e !== null && "code" in e) {
@@ -77,10 +79,10 @@ export function EmailVerification({ oobCode }: Props) {
 					<div style={{ marginTop: 12 }}>
 						<button
 							type="button"
-							onClick={() => router.push("/home")}
+							onClick={() => router.push("/")}
 							style={primaryButton}
 						>
-							Go to Home Page
+							Go to Sign In Page
 						</button>
 					</div>
 				</div>
