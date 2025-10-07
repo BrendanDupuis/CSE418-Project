@@ -1,10 +1,14 @@
 "use client";
 
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import {
+	createUserWithEmailAndPassword,
+	sendEmailVerification,
+} from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import { validatePassword } from "@/lib/password-validation";
 
 type Props = {
 	onSuccess?: () => void;
@@ -41,21 +45,9 @@ export function SingUpFrom({ onSuccess }: Props) {
 			return;
 		}
 
-		if (password.length < 8) {
-			setErr("Password must contain at least 8 characters");
-			return;
-		}
-
-		if (!/[A-Z]/.test(password)) {
-			setErr("Password must contain an upper case character");
-			return;
-		}
-		if (!/\d/.test(password)) {
-			setErr("Password must contain a numeric character");
-			return;
-		}
-		if (!/[^A-Za-z0-9]/.test(password)) {
-			setErr("Password must contain a non-alphanumeric character");
+		const passwordError = validatePassword(password);
+		if (passwordError) {
+			setErr(passwordError);
 			return;
 		}
 
@@ -73,7 +65,12 @@ export function SingUpFrom({ onSuccess }: Props) {
 				createdAt: serverTimestamp(),
 			});
 
-			setOk("Sign up complete!");
+			// Send email verification
+			await sendEmailVerification(userCredentials.user);
+
+			setOk(
+				"Sign up complete! Please check your email to verify your account.",
+			);
 			onSuccess?.();
 		} catch (e: unknown) {
 			let message = "Something went wrong.";

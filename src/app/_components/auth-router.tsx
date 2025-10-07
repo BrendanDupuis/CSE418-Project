@@ -17,8 +17,18 @@ export function AuthRouter({ children }: Props) {
 	useEffect(() => {
 		const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
 			if (user && pathname === "/") {
-				router.replace("/home");
-			} else if (!user) {
+				// Check if email is verified before redirecting to home
+				if (user.emailVerified) {
+					router.replace("/home");
+				} else {
+					// User is authenticated but email not verified, stay on landing page
+					// The login form will handle showing verification message
+				}
+			} else if (!user && pathname?.startsWith("/home")) {
+				// User not authenticated, redirect to landing
+				router.replace("/");
+			} else if (user && pathname?.startsWith("/home") && !user.emailVerified) {
+				// User authenticated but email not verified, redirect to landing
 				router.replace("/");
 			}
 			setChecked(true);

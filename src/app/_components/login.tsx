@@ -1,6 +1,11 @@
 "use client";
 
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+	sendEmailVerification,
+	sendPasswordResetEmail,
+	signInWithEmailAndPassword,
+	signOut,
+} from "firebase/auth";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
@@ -15,6 +20,8 @@ export function LoginForm({ onSuccess }: Props) {
 	const [show, setShow] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
 	const [ok, setOk] = useState<string | null>(null);
+	const [showResend, setShowResend] = useState(false);
+	const [showForgotPassword, setShowForgotPassword] = useState(false);
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
@@ -31,20 +38,93 @@ export function LoginForm({ onSuccess }: Props) {
 		}
 
 		try {
-			await signInWithEmailAndPassword(firebaseAuth, email, password);
+			const userCredential = await signInWithEmailAndPassword(
+				firebaseAuth,
+				email,
+				password,
+			);
+
+			// Check if email is verified
+			if (!userCredential.user.emailVerified) {
+				setErr(
+					"Please verify your email before signing in. Check your inbox for a verification email.",
+				);
+				setShowResend(true);
+				// Sign out the user since they can't proceed without verification
+				await signOut(firebaseAuth);
+				return;
+			}
 
 			setOk("Signed in!");
 			onSuccess?.();
-		} catch (e: any) {
-			let message = e.message || "Something went wrong.";
-			switch (e.code) {
+		} catch (e: unknown) {
+			let message = "Something went wrong.";
+			let code: string | undefined;
+			if (
+				typeof e === "object" &&
+				e !== null &&
+				"message" in e &&
+				"code" in e
+			) {
+				const errObj = e as { message?: string; code?: string };
+				message = errObj.message ?? message;
+				code = errObj.code;
+			}
+			switch (code) {
 				case "auth/invalid-credential":
 					message = "Invalid email or password";
 					break;
 				case "auth/invalid-email":
 					message = "Invalid email";
+					break;
 			}
 
+			setErr(message);
+		}
+	}
+
+	async function handleResendVerification() {
+		try {
+			// First sign in to get the user, then send verification
+			const userCredential = await signInWithEmailAndPassword(
+				firebaseAuth,
+				email,
+				password,
+			);
+			await sendEmailVerification(userCredential.user);
+			await signOut(firebaseAuth);
+			setOk(
+				"Verification email sent! Please check your inbox. (Check your spam)",
+			);
+			setShowResend(false);
+		} catch {
+			setErr("Failed to send verification email. Please try again.");
+		}
+	}
+
+	async function handleForgotPassword() {
+		if (!email) {
+			setErr("Please enter your email address first.");
+			return;
+		}
+
+		try {
+			await sendPasswordResetEmail(firebaseAuth, email);
+			setOk("Password reset email sent! Check your inbox.");
+			setShowForgotPassword(false);
+		} catch (e: unknown) {
+			let message = "Failed to send password reset email.";
+			if (typeof e === "object" && e !== null && "code" in e) {
+				const errObj = e as { code?: string };
+				switch (errObj.code) {
+					case "auth/user-not-found":
+						message = "No account found with this email address.";
+						break;
+					case "auth/invalid-email":
+						message = "Invalid email address.";
+						break;
+				}
+			}
 			setErr(message);
 		}
 	}
@@ -113,10 +193,63 @@ export function LoginForm({ onSuccess }: Props) {
 				<button type="submit" style={primaryButton}>
 					Sign in
 				</button>
-				<button type="button" style={linkButton}>
+				<button
+					type="button"
+					style={linkButton}
+					onClick={() => setShowForgotPassword(!showForgotPassword)}
+				>
 					Forgot password?
 				</button>
 			</div>
+
+			{showResend && (
+				<div style={{ marginTop: 8 }}>
+					<button
+						type="button"
+						onClick={handleResendVerification}
+						style={linkButton}
+					>
+						Resend verification email
+					</button>
+				</div>
+			)}
+
+			{showForgotPassword && (
+				<div
+					style={{
+						marginTop: 8,
+						padding: 12,
+						border: "1px solid #e5e7eb",
+						borderRadius: 8,
+					}}
+				>
+					<p
+						style={{
+							margin: "0 0 8px 0",
+							fontSize: "0.875rem",
+							color: "#6b7280",
+						}}
+					>
+						Enter your email address to receive a password reset link.
+					</p>
+					<div style={{ display: "flex", gap: 8 }}>
+						<button
+							type="button"
+							onClick={handleForgotPassword}
+							style={primaryButton}
+						>
+							Send reset email
+						</button>
+						<button
+							type="button"
+							onClick={() => setShowForgotPassword(false)}
+							style={linkButton}
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			)}
 
 			<div style={{ color: "#047857", minHeight: 20, marginTop: 8 }}>{ok}</div>
 		</form>
