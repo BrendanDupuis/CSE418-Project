@@ -1,42 +1,27 @@
 "use client";
 
 import { confirmPasswordReset } from "firebase/auth";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
 import { validatePassword } from "@/lib/password-validation";
 
-export default function ResetPasswordPage() {
+interface Props {
+	oobCode: string;
+}
+
+export function PasswordReset({ oobCode }: Props) {
 	const router = useRouter();
-	const searchParams = useSearchParams();
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [show, setShow] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
 	const [ok, setOk] = useState<string | null>(null);
-	const [loading, setLoading] = useState(false);
-	const [oobCode, setOobCode] = useState<string | null>(null);
 
-	useEffect(() => {
-		const code = searchParams.get("oobCode");
-		if (!code) {
-			setErr(
-				"Invalid or missing reset code. Please request a new password reset.",
-			);
-			return;
-		}
-		setOobCode(code);
-	}, [searchParams]);
-
-	async function handleSubmit(e: React.FormEvent) {
+	async function handlePasswordReset(e: React.FormEvent) {
 		e.preventDefault();
 		setErr(null);
 		setOk(null);
-
-		if (!oobCode) {
-			setErr("Invalid reset code.");
-			return;
-		}
 
 		if (!password || !confirmPassword) {
 			setErr("Password and confirm password are required.");
@@ -54,7 +39,6 @@ export default function ResetPasswordPage() {
 			return;
 		}
 
-		setLoading(true);
 		try {
 			await confirmPasswordReset(firebaseAuth, oobCode, password);
 			setOk(
@@ -80,24 +64,7 @@ export default function ResetPasswordPage() {
 				}
 			}
 			setErr(message);
-		} finally {
-			setLoading(false);
 		}
-	}
-
-	if (!oobCode && !err) {
-		return (
-			<div
-				style={{
-					display: "flex",
-					justifyContent: "center",
-					alignItems: "center",
-					height: "100vh",
-				}}
-			>
-				<div>Loading...</div>
-			</div>
-		);
 	}
 
 	return (
@@ -111,7 +78,7 @@ export default function ResetPasswordPage() {
 		>
 			<div style={{ width: "100%", maxWidth: 420 }}>
 				<form
-					onSubmit={handleSubmit}
+					onSubmit={handlePasswordReset}
 					style={{
 						width: "100%",
 						border: "1px solid rgba(0,0,0,.15)",
@@ -177,8 +144,8 @@ export default function ResetPasswordPage() {
 					</div>
 
 					<div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-						<button type="submit" disabled={loading} style={primaryButton}>
-							{loading ? "Resetting..." : "Reset Password"}
+						<button type="submit" style={primaryButton}>
+							Reset Password
 						</button>
 						<button
 							type="button"

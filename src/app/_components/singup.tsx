@@ -10,11 +10,7 @@ import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import { validatePassword } from "@/lib/password-validation";
 
-type Props = {
-	onSuccess?: () => void;
-};
-
-export function SingUpFrom({ onSuccess }: Props) {
+export function SingUpFrom() {
 	const [username, setUsername] = useState("");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
@@ -52,6 +48,11 @@ export function SingUpFrom({ onSuccess }: Props) {
 		}
 
 		try {
+			setUsername("");
+			setEmail("");
+			setPassword("");
+			setPassword2("");
+
 			const userCredentials = await createUserWithEmailAndPassword(
 				firebaseAuth,
 				email,
@@ -65,13 +66,11 @@ export function SingUpFrom({ onSuccess }: Props) {
 				createdAt: serverTimestamp(),
 			});
 
-			// Send email verification
 			await sendEmailVerification(userCredentials.user);
 
 			setOk(
 				"Sign up complete! Please check your email to verify your account.",
 			);
-			onSuccess?.();
 		} catch (e: unknown) {
 			let message = "Something went wrong.";
 			let code: string | undefined;
