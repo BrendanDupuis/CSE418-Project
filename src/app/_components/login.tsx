@@ -9,6 +9,12 @@ import {
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
+import {
+	generateVerificationCode,
+	sendVerificationEmail,
+	storeVerificationCode,
+} from "@/lib/twoFactorAuth";
+import { TwoFactorVerification } from "./two-factor-verification";
 
 type Props = {
 	onSuccess?: () => void;
@@ -22,6 +28,10 @@ export function LoginForm({ onSuccess }: Props) {
 	const [ok, setOk] = useState<string | null>(null);
 	const [showResend, setShowResend] = useState(false);
 	const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+	//2FA related states
+	const [needs2FA, setNeeds2FA] = useState(false);
+	const [userId, setUserId] = useState<string | null>(null);
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
@@ -44,19 +54,30 @@ export function LoginForm({ onSuccess }: Props) {
 				password,
 			);
 
-			// Check if email is verified
-			if (!userCredential.user.emailVerified) {
+			const user = userCredential.user;
+
+			//Check if email is verified
+			if (!user.emailVerified) {
 				setErr(
 					"Please verify your email before signing in. Check your inbox for a verification email.",
 				);
 				setShowResend(true);
-				// Sign out the user since they can't proceed without verification
+				//Sign out the user since they can't proceed without verification
 				await signOut(firebaseAuth);
 				return;
 			}
 
-			setOk("Signed in!");
-			onSuccess?.();
+			//Generate and send 2FA code
+			const code = generateVerificationCode();
+			await storeVerificationCode(user.uid, code);
+			await sendVerificationEmail(user.email || email, code);
+
+			setUserId(user.uid);
+			setNeeds2FA(true);
+			setOk("Verification code sent! Check your console/email.");
+
+			//Temporarily sign out, wait for 2FA
+			await firebaseAuth.signOut();
 		} catch (e: unknown) {
 			let message = "Something went wrong.";
 			let code: string | undefined;
@@ -85,7 +106,7 @@ export function LoginForm({ onSuccess }: Props) {
 
 	async function handleResendVerification() {
 		try {
-			// First sign in to get the user, then send verification
+			//First sign in to get the user, then send verification
 			const userCredential = await signInWithEmailAndPassword(
 				firebaseAuth,
 				email,
@@ -127,6 +148,37 @@ export function LoginForm({ onSuccess }: Props) {
 			}
 			setErr(message);
 		}
+	}
+
+	async function handleResendCode() {
+		if (!userId) return;
+
+		try {
+			const code = generateVerificationCode();
+			await storeVerificationCode(userId, code);
+			await sendVerificationEmail(email, code);
+			setOk("New verification code sent!");
+		} catch (error: any) {
+			setErr(error.message || "Failed to resend code");
+		}
+	}
+
+	async function handle2FASuccess() {
+		//Re-login after successful 2FA
+		await signInWithEmailAndPassword(firebaseAuth, email, password);
+		onSuccess?.();
+	}
+
+	//If 2FA is needed, show 2FA component
+	if (needs2FA && userId) {
+		return (
+			<TwoFactorVerification
+				userId={userId}
+				email={email}
+				onSuccess={handle2FASuccess}
+				onResend={handleResendCode}
+			/>
+		);
 	}
 
 	return (
