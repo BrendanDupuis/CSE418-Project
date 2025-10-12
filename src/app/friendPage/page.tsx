@@ -1,27 +1,33 @@
+"use client";
+
 import Link from 'next/link';
 import React from 'react';
 
-const friends = [{id: 1, name: "Friend1", lastMessage: "..."}, {id: 2, name: "Friend2", lastMessage: "..."} ];
-export default function Friends() {
+//placeholder data will come from backend
+const friends = [
+    { id: 1, name: "Friend1" },
+    { id: 2, name: "Friend2"},
+    { id: 3, name: "Friend3" },
+    { id: 4, name: "Friend4"}
+];
+
+export default function FriendsPage() {
     return (
-    <div>
-	    <h1>My Messages</h1>
-        <Link href= "/homePage" > Home</Link>    
-	    <div>
+        <div>
+            <header>
+                <h1>My Messages</h1>
+                <Link href="/homePage">Home</Link>
+            </header>
+            
+            <div >
                 {friends.map((friend) => (
-                    <Link 
-                        href={`/messages/${friend.id}`} 
-                        key={friend.id}
-                        className="friend-item"
-                    >
-                        <div className="friend-info">
+                    <Link href={`/messagePage/${friend.id}`} key={friend.id}>
+                        <div>
                             <h3>{friend.name}</h3>
-                            <p>{friend.lastMessage}</p>
                         </div>
                     </Link>
                 ))}
-		    	
-	    </div>
-    </div>
+            </div>
+        </div>
     );
 }
