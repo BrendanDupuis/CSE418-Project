@@ -9,11 +9,7 @@ import {
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
-import {
-	generateVerificationCode,
-	sendVerificationEmail,
-	storeVerificationCode,
-} from "@/lib/twoFactorAuth";
+import { sendVerificationCode } from "@/lib/twoFactorAuth";
 import { TwoFactorVerification } from "./two-factor-verification";
 
 type Props = {
@@ -56,25 +52,23 @@ export function LoginForm({ onSuccess }: Props) {
 
 			const user = userCredential.user;
 
-			//Check if email is verified
-			if (!user.emailVerified) {
-				setErr(
-					"Please verify your email before signing in. Check your inbox for a verification email.",
-				);
-				setShowResend(true);
-				//Sign out the user since they can't proceed without verification
-				await signOut(firebaseAuth);
-				return;
-			}
+//			//Check if email is verified
+//			if (!user.emailVerified) {
+//				setErr(
+//					"Please verify your email before signing in. Check your inbox for a verification email.",
+//				);
+//				setShowResend(true);
+//				//Sign out the user since they can't proceed without verification
+//				await signOut(firebaseAuth);
+//				return;
+//			}
 
-			//Generate and send 2FA code
-			const code = generateVerificationCode();
-			await storeVerificationCode(user.uid, code);
-			await sendVerificationEmail(user.email || email, code);
+			//Generate and send 2FA code via server API
+			await sendVerificationCode(user.uid, user.email || email);
 
 			setUserId(user.uid);
 			setNeeds2FA(true);
-			setOk("Verification code sent! Check your console/email.");
+			setOk("Verification code sent! Check your email.");
 
 			//Temporarily sign out, wait for 2FA
 			await firebaseAuth.signOut();
@@ -154,9 +148,7 @@ export function LoginForm({ onSuccess }: Props) {
 		if (!userId) return;
 
 		try {
-			const code = generateVerificationCode();
-			await storeVerificationCode(userId, code);
-			await sendVerificationEmail(email, code);
+			await sendVerificationCode(userId, email);
 			setOk("New verification code sent!");
 		} catch (error: any) {
 			setErr(error.message || "Failed to resend code");
