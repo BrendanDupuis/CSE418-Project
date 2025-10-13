@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { verificationStore } from "@/lib/verificationStore";
+import { storeVerificationCode } from "@/lib/models/verificationCode";
+import { sendVerificationCodeEmail } from "@/lib/email";
 
 /**
  * Generate a random 6-digit verification code
@@ -10,7 +11,7 @@ function generateVerificationCode(): string {
 
 /**
  * POST /api/2fa/send-code
- * Generate and send 2FA verification code (using shared in-memory storage for testing)
+ * Generate and send 2FA verification code (using MongoDB storage)
  */
 export async function POST(request: Request) {
 	try {
@@ -27,28 +28,26 @@ export async function POST(request: Request) {
 		// Generate verification code
 		const code = generateVerificationCode();
 
-		// Store code in shared memory with expiration
-		const expiresAt = new Date();
-		expiresAt.setMinutes(expiresAt.getMinutes() + 10); // Code expires in 10 minutes
+		// Store code in MongoDB with expiration
+		await storeVerificationCode(userId, code, 10); // 10 minutes expiration
 
-		verificationStore.set(userId, {
-			code,
-			expiresAt: expiresAt.toISOString(),
-			createdAt: new Date().toISOString(),
-		});
+		// Send email using Resend
+		const emailSent = await sendVerificationCodeEmail(email, code);
 
-		// Log to console for testing (since we don't have email configured)
-		console.log(`
+		if (!emailSent) {
+			console.warn("Failed to send email, but code was stored");
+			// Development fallback: log code to console
+			console.log(`
 =================================
-2FA Verification Code
+2FA Verification Code (Fallback)
 =================================
 Email: ${email}
 User ID: ${userId}
 Code: ${code}
 Expires in: 10 minutes
-Store size: ${verificationStore.size()}
 =================================
-		`);
+			`);
+		}
 
 		return NextResponse.json({
 			success: true,

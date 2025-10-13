@@ -1,43 +1,30 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 /**
- * Create email transporter based on environment variables
+ * Create Resend client based on environment variables
  */
-export function createEmailTransporter() {
-	// Check if email is configured
-	const emailUser = process.env.EMAIL_USER;
-	const emailPass = process.env.EMAIL_PASS;
+export function createResendClient() {
+	const apiKey = process.env.RESEND_API_KEY;
 
-	if (!emailUser || !emailPass) {
-		console.warn("Email credentials not configured. Using test account.");
-		// For development: create a test account
-		// In production, you should always have proper email credentials
+	if (!apiKey) {
+		console.warn("Resend API key not configured. Using fallback console logging.");
 		return null;
 	}
 
-	// Create transporter with SMTP
-	return nodemailer.createTransport({
-		host: process.env.SMTP_HOST || "smtp.gmail.com",
-		port: Number.parseInt(process.env.SMTP_PORT || "587"),
-		secure: process.env.SMTP_PORT === "465", // true for 465, false for other ports
-		auth: {
-			user: emailUser,
-			pass: emailPass,
-		},
-	});
+	return new Resend(apiKey);
 }
 
 /**
- * Send 2FA verification code email
+ * Send 2FA verification code email using Resend
  */
 export async function sendVerificationCodeEmail(
 	to: string,
 	code: string,
 ): Promise<boolean> {
 	try {
-		const transporter = createEmailTransporter();
+		const resend = createResendClient();
 
-		if (!transporter) {
+		if (!resend) {
 			// Fallback: log to console for development
 			console.log(`
 =================================
@@ -51,9 +38,11 @@ Expires in: 10 minutes
 			return true;
 		}
 
-		const mailOptions = {
-			from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-			to,
+		const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+
+		const { data, error } = await resend.emails.send({
+			from: fromEmail,
+			to: [to],
 			subject: "Your Two-Factor Authentication Code",
 			html: `
 				<!DOCTYPE html>
@@ -99,10 +88,14 @@ Expires in: 10 minutes
 				</html>
 			`,
 			text: `Your two-factor authentication code is: ${code}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this code, please ignore this email.`,
-		};
+		});
 
-		await transporter.sendMail(mailOptions);
-		console.log(`2FA verification email sent to ${to}`);
+		if (error) {
+			console.error("Error sending verification email with Resend:", error);
+			return false;
+		}
+
+		console.log(`2FA verification email sent to ${to} (ID: ${data?.id})`);
 		return true;
 	} catch (error) {
 		console.error("Error sending verification email:", error);

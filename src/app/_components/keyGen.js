@@ -1,10 +1,11 @@
 /*
-Generating user keys which will be called during enrollment. We will store the public keys on the server so anyone can
-access them. Then the privatekeys will be stored securly in an indexedDB, using the built in indexedDB API for javascript. 
-This will keep it so only the designated person can access their own private key, which will be needed during encryption 
+Generating user keys which will be called during enrollment. We will store the public keys on MongoDB so anyone can
+access them. Then the privatekeys will be stored securly in an indexedDB, using the built in indexedDB API for javascript.
+This will keep it so only the designated person can access their own private key, which will be needed during encryption
 and decryption. I found sample code on the indexedDB Api from
 https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB, and built off of that.
 */
+import { storePublicKey as storePublicKeyInDB, getPublicKeyFromDB } from '@/lib/models/userPublicKey';
 async function openIndexedDB(){
     const request = indexedDB.open("privateKeyDatabase", 1);
      const db = await new Promise((resolve, reject) => {
@@ -27,9 +28,9 @@ async function openIndexedDB(){
   return db;
 
 }
-//Once this function is finished, the private key is stored locally into the indexeddb, while the publicKey is returned back
-//to be stored to the database so anyone can access publickeys
-async function genUserKeys(userName){
+//Once this function is finished, the private key is stored locally into the indexeddb, while the publicKey is stored
+//in MongoDB so anyone can access public keys
+export async function genUserKeys(userName){
     const keys = await crypto.subtle.generateKey({name: "ECDH",namedCurve: "P-256", },true, ["deriveKey", "deriveBits"]);
     //Generate the private and public keys
     const publicKey = await crypto.subtle.exportKey("jwk", keys.publicKey);
@@ -43,12 +44,16 @@ async function genUserKeys(userName){
     request.onsuccess = () => resolve();
     request.onerror = (e) => reject(e.target.error);
   });
+
+  // Store public key in MongoDB
+  await storePublicKeyInDB(userName, publicKey);
+
   return publicKey;
 }
 
 
-async function getPrivateKey(userName){
-    const db = await openIndexedDB(); 
+export async function getPrivateKey(userName){
+    const db = await openIndexedDB();
     const transaction = db.transaction("keys", "readonly");
     const store = transaction.objectStore("keys");
     const keyEntry = await new Promise((resolve, reject) => {
@@ -71,6 +76,22 @@ async function getPrivateKey(userName){
     return privateKey;
 }
 
-async function getPublicKey(userName){
-    //Need to implement
+export async function getPublicKey(userName){
+    // Fetch public key from MongoDB
+    const publicKeyJWK = await getPublicKeyFromDB(userName);
+
+    if (!publicKeyJWK) {
+        throw new Error(`Public key not found for user: ${userName}`);
+    }
+
+    // Import the JWK back into a CryptoKey object
+    const publicKey = await crypto.subtle.importKey(
+        "jwk",
+        publicKeyJWK,
+        { name: "ECDH", namedCurve: "P-256" },
+        true,
+        []
+    );
+
+    return publicKey;
 }
