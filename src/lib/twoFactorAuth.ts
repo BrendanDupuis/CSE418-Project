@@ -1,28 +1,30 @@
-import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
-import { firebaseDb } from "./firebase";
+/**
+ * Client-side 2FA functions that call server-side APIs
+ * This keeps sensitive operations (code generation, email sending) on the server
+ */
 
 /**
- * Generate a random 6-digit verification code
+ * Request the server to generate and send a verification code
  */
-export function generateVerificationCode(): string {
-	return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-/**
- * Store the verification code in Firestore with expiration time
- */
-export async function storeVerificationCode(
+export async function sendVerificationCode(
 	userId: string,
-	code: string,
+	email: string,
 ): Promise<void> {
-	const expiresAt = new Date();
-	expiresAt.setMinutes(expiresAt.getMinutes() + 10); // Code expires in 10 minutes
-
-	await setDoc(doc(firebaseDb, "verificationCodes", userId), {
-		code,
-		expiresAt: expiresAt.toISOString(),
-		createdAt: new Date().toISOString(),
+	const response = await fetch("/api/2fa/send-code", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ userId, email }),
 	});
+
+	if (!response.ok) {
+		const error = await response.json();
+		throw new Error(error.error || "Failed to send verification code");
+	}
+
+	const data = await response.json();
+	console.log(data.message);
 }
 
 /**
@@ -30,57 +32,57 @@ export async function storeVerificationCode(
  */
 export async function verifyCode(
 	userId: string,
-	inputCode: string,
+	code: string,
 ): Promise<boolean> {
-	const docRef = doc(firebaseDb, "verificationCodes", userId);
-	const docSnap = await getDoc(docRef);
+	const response = await fetch("/api/2fa/verify-code", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ userId, code }),
+	});
 
-	if (!docSnap.exists()) {
+	const data = await response.json();
+
+	if (!response.ok) {
+		console.error(data.error);
 		return false;
 	}
 
-	const data = docSnap.data();
-	const expiresAt = new Date(data.expiresAt);
+	return data.valid;
+}
 
-	// Check if code is expired
-	if (expiresAt < new Date()) {
-		await deleteDoc(docRef); // Clean up expired code
-		return false;
-	}
-
-	// Check if code matches
-	if (data.code === inputCode) {
-		await deleteDoc(docRef); // Delete code after successful verification
-		return true;
-	}
-
-	return false;
+// Backward compatibility exports (deprecated - use sendVerificationCode instead)
+/**
+ * @deprecated Use sendVerificationCode instead
+ */
+export function generateVerificationCode(): string {
+	console.warn(
+		"generateVerificationCode is deprecated. Code generation now happens server-side.",
+	);
+	return "000000"; // Dummy value
 }
 
 /**
- * Send verification code via email (console log for now, can be replaced with actual email service)
+ * @deprecated Use sendVerificationCode instead
+ */
+export async function storeVerificationCode(
+	userId: string,
+	code: string,
+): Promise<void> {
+	console.warn(
+		"storeVerificationCode is deprecated. Storage now happens server-side via sendVerificationCode.",
+	);
+}
+
+/**
+ * @deprecated Use sendVerificationCode instead
  */
 export async function sendVerificationEmail(
 	email: string,
 	code: string,
 ): Promise<void> {
-	// For now, just log to console
-	// In production, you would use a service like SendGrid, AWS SES, or Nodemailer
-	console.log(`
-=================================
-2FA Verification Code
-=================================
-Email: ${email}
-Code: ${code}
-Expires in: 10 minutes
-=================================
-	`);
-
-	// TODO: Implement actual email sending
-	// Example with SendGrid:
-	// await sendEmail({
-	//   to: email,
-	//   subject: "Your Verification Code",
-	//   text: `Your verification code is: ${code}. It expires in 10 minutes.`
-	// });
+	console.warn(
+		"sendVerificationEmail is deprecated. Email sending now happens server-side via sendVerificationCode.",
+	);
 }
