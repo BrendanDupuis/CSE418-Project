@@ -13,6 +13,7 @@ export default function HomePage() {
     };
 
     return (
+      
         <div>
             <h1>SecureDove Messaging App</h1>
             <h2>Signed In As: {name}</h2>
@@ -36,7 +37,38 @@ export default function HomePage() {
                     </div>
                 )}
             </div>
-            
+            <style jsx>{`
+              *{
+              text-align: center;
+              }
+                h1 {
+                
+                    font-size: 4rem;
+                    margin-bottom: 1rem;
+                }
+                h2 {
+                
+                    font-size: 2rem;
+                    margin-bottom: 2rem;              
+                }
+                    nav {
+                    text-align: center;
+                    font-size: 2rem;
+                    margin-bottom: 2rem;      
+                }
+                h3 {
+                
+                    font-size: 2rem;
+                }
+                button{
+                
+                  align-items: center;
+                  color: red;
+                  font-size: 2rem;
+                }
+                
+                
+            `}</style>
           
         </div>
     );

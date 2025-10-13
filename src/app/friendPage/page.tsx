@@ -14,9 +14,10 @@ const friends = [
 export default function FriendsPage() {
     return (
         <div>
+            
             <header>
-                <h1>My Messages</h1>
                 <Link href="/homePage">Home</Link>
+                <h1>My Messages</h1>
             </header>
             
             <div >
@@ -28,6 +29,35 @@ export default function FriendsPage() {
                     </Link>
                 ))}
             </div>
+            <style jsx>{`
+              *{
+              text-align: center;
+              }
+            header{
+            font-size: 2rem;
+            }
+
+                h1 {
+                
+                    font-size: 4rem;
+                    margin-bottom: 1rem;
+                }
+                h2 {
+                
+                    font-size: 2rem;
+                    margin-bottom: 2rem;              
+                }
+                    nav {
+                    text-align: center;
+                    font-size: 2rem;
+                    margin-bottom: 2rem;      
+                }
+                h3 {
+                
+                    font-size: 2rem;
+                }
+              
+            `}</style>
         </div>
     );
 }
