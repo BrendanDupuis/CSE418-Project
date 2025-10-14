@@ -1,97 +1,110 @@
 rules_version = '2';
 service cloud.firestore {
-match /databases/{database}/documents {
-  function isSignedIn() {
-    return request.auth != null;
-  }
+  match /databases/{database}/documents {
+    function sep() { return "____"; }
 
-  function isOwner(uid) {
-    return isSignedIn() && request.auth.uid == uid;
-  }
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-  function isChatParticipant(chatId) {
-    return isSignedIn() && 
-      exists(/databases/$(database)/documents/chat/$(chatId)) &&
-      (request.auth.uid == get(/databases/$(database)/documents/chat/$(chatId)).data.user1 ||
-        request.auth.uid == get(/databases/$(database)/documents/chat/$(chatId)).data.user2);
-  }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
 
-  function userExists(uid) {
-    return exists(/databases/$(database)/documents/users/$(uid));
-  }
+    function isSafeId(id) {
+      // Adjust regex if your UID format differs
+      return id is string && id.matches('^[a-zA-Z0-9_-]+$');
+    }
 
-  function bothUsersExist(user1, user2) {
-    return userExists(user1) && userExists(user2);
-  }
+    function userExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
 
-  function isValidChatId(chatId) {
-    // ChatId should be in format: userId1____userId2
-    // where both user IDs are sorted alphabetically
-    return chatId.matches('^[a-zA-Z0-9_-]+____[a-zA-Z0-9_-]+$');
-  }
+    function bothUsersExist(u1, u2) {
+      return userExists(u1) && userExists(u2);
+    }
 
-  function chatIdMatchesUsers(chatId, user1, user2) {
-    // Extract user IDs from chatId and verify they match the provided users
-    // ChatId format: userId1____userId2 (sorted alphabetically)
-    let parts = chatId.split('____');
-    return parts.size() == 2 
-      && parts[0] == [user1, user2].sort()[0]
-      && parts[1] == [user1, user2].sort()[1];
-  }
+    // Lexical min/max to avoid sort()
+    function minStr(a, b) { return a <= b ? a : b; }
+    function maxStr(a, b) { return a <= b ? b : a; }
 
-  match /users/{uid} {
-    // Any signed-in user can read user profiles
-    allow read: if isSignedIn();
-    
-    // Only the user can create their own profile during signup
-    allow create: if isOwner(uid)
-      && request.resource.data.keys().hasOnly(['username','email','createdAt'])
-      && request.resource.data.username is string
-      && request.resource.data.email is string
-      && request.resource.data.email == request.auth.token.email;
-    
-    allow update: if false;
-    allow delete: if isOwner(uid);
-  }
-    
-    
-  // Chat documents
-  match /chat/{chatId} {
-    // Only participants can read the chat document
-    allow read: if isChatParticipant(chatId);
+    function expectedChatId(u1, u2) {
+      return minStr(u1, u2) + sep() + maxStr(u1, u2);
+    }
 
-    // Only participants can create chat documents
-    // Both users must exist, creator must be one of them, and chatId format must be valid
-    allow create: if isSignedIn() 
-      && (request.auth.uid == request.resource.data.user1 || request.auth.uid == request.resource.data.user2)
-      && request.resource.data.keys().hasOnly(['user1','user2','createdAt'])
-      && bothUsersExist(request.resource.data.user1, request.resource.data.user2)
-      && isValidChatId(chatId)
-      && chatIdMatchesUsers(chatId, request.resource.data.user1, request.resource.data.user2);
+    // Cache the chat doc read once
+    function chatDoc(chatId) {
+      return get(/databases/$(database)/documents/chat/$(chatId));
+    }
 
-    // chat documents are immutable
-    allow update: if false;
-    allow delete: if false
+    function chatExists(chatId) {
+      return exists(/databases/$(database)/documents/chat/$(chatId));
+    }
 
-      // Messages subcollection
+    function isChatParticipant(chatId) {
+      return isSignedIn()
+        && chatExists(chatId)
+        && (
+          request.auth.uid == chatDoc(chatId).data.user1 ||
+          request.auth.uid == chatDoc(chatId).data.user2
+        );
+    }
+
+    match /users/{uid} {
+      allow read: if isSignedIn();
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['username', 'email', 'createdAt'])
+        && request.resource.data.username is string
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt is timestamp;
+
+      allow update: if false;
+      allow delete: if isOwner(uid);
+    }
+
+    match /chat/{chatId} {
+      // Only participants can read the chat document
+      allow read: if isChatParticipant(chatId);
+
+      // Only participants can create with canonical chatId and valid users
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['user1', 'user2', 'createdAt'])
+        && request.resource.data.user1 is string
+        && request.resource.data.user2 is string
+        && request.resource.data.user1 != request.resource.data.user2
+        && isSafeId(request.resource.data.user1)
+        && isSafeId(request.resource.data.user2)
+        && bothUsersExist(request.resource.data.user1, request.resource.data.user2)
+        // enforce canonical chatId = min(u1,u2) + "____" + max(u1,u2)
+        && chatId == expectedChatId(request.resource.data.user1, request.resource.data.user2)
+        // creator must be a participant
+        && (request.auth.uid == request.resource.data.user1 || request.auth.uid == request.resource.data.user2)
+        && request.resource.data.createdAt is timestamp;
+
+      // chat documents are immutable
+      allow update: if false;
+      allow delete: if false;
+
       match /messages/{messageId} {
-        // Only chat participants can read messages
         allow read: if isChatParticipant(chatId);
 
-        // Only chat participants can create messages
         allow create: if isChatParticipant(chatId)
-          && request.auth.uid == request.resource.data.fromUserId
-          && request.resource.data.keys().hasOnly(['text','fromUserId','timestamp'])
-          && isValidChatId(chatId);
+          && request.resource.data.keys().hasOnly(['text', 'fromUserId', 'timestamp'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 5000
+          && request.resource.data.fromUserId is string
+          && request.resource.data.timestamp is timestamp
+          && request.auth.uid == request.resource.data.fromUserId;
 
         allow update: if false;
 
-        // Only the message sender can delete their own messages
         allow delete: if isChatParticipant(chatId)
           && request.auth.uid == resource.data.fromUserId;
       }
     }
-
 
     match /{document=**} {
       allow read, write: if false;
