@@ -23,9 +23,9 @@ async function makeSharedKey(myPrivateKey,theirPublicKey){
     //This shared key is the same as myPublicKey, theirPrivateKey by using this function 
 }
 
-export async function encryptMessages(sendersUserName,receiversUserName, messageToEncrypt) {
+export async function encryptMessages(sendersUserName,receiversUserName, messageToEncrypt, password) {
     //Pass in their public key so I know where its going, and I can access my private key
-    const myPrivateKey = await getPrivateKey(sendersUserName);
+    const myPrivateKey = await getPrivateKey(sendersUserName,password);
     const receiversPublicKey = await getPublicKey(receiversUserName);
     const sharedKey = await makeSharedKey(myPrivateKey,receiversPublicKey);
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -41,9 +41,9 @@ export async function encryptMessages(sendersUserName,receiversUserName, message
     return encryptedObject;
 }
 
-export async function decryptMessages(sendersUserName,receiversUserName, messageToDecrypt) {
+export async function decryptMessages(sendersUserName,receiversUserName, messageToDecrypt,password) {
     //decrypt using the key provided and the encrypted message
-    const myPrivateKey = await getPrivateKey(receiversUserName);
+    const myPrivateKey = await getPrivateKey(receiversUserName,password);
     const sendersPublicKey = await getPublicKey(sendersUserName);
     const sharedKey = await makeSharedKey(myPrivateKey,sendersPublicKey);
     const iv = new Uint8Array(messageToDecrypt.iv);
