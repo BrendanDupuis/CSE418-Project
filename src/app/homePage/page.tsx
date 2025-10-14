@@ -1,9 +1,12 @@
 "use client";
 
+import { deleteUser } from "firebase/auth";
+import { deleteDoc, doc } from "firebase/firestore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { firebaseAuth } from "@/lib/firebase";
+import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import { deleteAllUserChats } from "@/lib/models/chat";
 import { getUserData, type UserData } from "@/lib/models/user";
 
 export default function HomePage() {
@@ -13,8 +16,22 @@ export default function HomePage() {
 	const [userData, setUserData] = useState<UserData | null>(null);
 	const [loading, setLoading] = useState(true);
 
-	const handleDeleteAccount = () => {
-		console.log("Delete account requested");
+	const handleDeleteAccount = async () => {
+		try {
+			const user = firebaseAuth.currentUser;
+			if (!user) {
+				alert("No user logged in");
+				return;
+			}
+
+			await deleteAllUserChats(user.uid);
+			await deleteDoc(doc(firebaseDb, "users", user.uid));
+			await deleteUser(user);
+			router.replace("/");
+		} catch (error) {
+			console.error("Error deleting account:", error);
+			alert("Failed to delete account. Please try again.");
+		}
 	};
 
 	useEffect(() => {

@@ -48,7 +48,7 @@ export default function Landing() {
 				</div>
 
 				{mode === "signin" ? (
-					<LoginForm onSuccess={() => router.push("/home")} />
+					<LoginForm onSuccess={() => router.push("/homePage")} />
 				) : (
 					<SingUpFrom />
 				)}

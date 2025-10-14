@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
 import { generateChatId } from "@/lib/models/chat";
-import { getAllUsers, type UserWithId } from "@/lib/models/user";
+import { subscribeToUsers, type UserWithId } from "@/lib/models/user";
 
 export default function FriendsPage() {
 	const [users, setUsers] = useState<UserWithId[]>([]);
@@ -13,29 +13,34 @@ export default function FriendsPage() {
 	const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
 	useEffect(() => {
-		const fetchUsers = async () => {
-			try {
-				setLoading(true);
-				setError(null);
+		// Get current user ID
+		const currentUser = firebaseAuth.currentUser;
+		if (currentUser) {
+			setCurrentUserId(currentUser.uid);
+		}
 
-				// Get current user ID
-				const currentUser = firebaseAuth.currentUser;
-				if (currentUser) {
-					setCurrentUserId(currentUser.uid);
-				}
-
-				const usersData = await getAllUsers();
-				setUsers(usersData);
-			} catch (err) {
-				console.error("Error fetching users:", err);
-				setError("Failed to load users. Please try again.");
-			} finally {
+		// Set up real-time subscription to users
+		const unsubscribe = subscribeToUsers(
+			(usersData) => {
+				const otherUsers = usersData.filter(
+					(user) => user.id !== currentUserId,
+				);
+				setUsers(otherUsers);
 				setLoading(false);
-			}
-		};
+				setError(null);
+			},
+			(err) => {
+				console.error("Error in users subscription:", err);
+				setError("Failed to load users. Please try again.");
+				setLoading(false);
+			},
+		);
 
-		fetchUsers();
-	}, []);
+		// Cleanup subscription on unmount
+		return () => {
+			unsubscribe();
+		};
+	}, [currentUserId]);
 
 	if (loading) {
 		return (

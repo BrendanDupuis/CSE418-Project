@@ -4,6 +4,7 @@ import {
 	doc,
 	getDoc,
 	getDocs,
+	onSnapshot,
 	orderBy,
 	query,
 } from "firebase/firestore";
@@ -53,4 +54,30 @@ export async function getAllUsers(): Promise<UserWithId[]> {
 		console.error("Error fetching all users:", error);
 		return [];
 	}
+}
+
+export function subscribeToUsers(
+	onUpdate: (users: UserWithId[]) => void,
+	onError?: (error: Error) => void,
+): () => void {
+	const usersCollection = collection(firebaseDb, "users");
+	const usersQuery = query(usersCollection, orderBy("createdAt", "desc"));
+
+	return onSnapshot(
+		usersQuery,
+		(usersSnapshot) => {
+			const users: UserWithId[] = [];
+			usersSnapshot.forEach((doc) => {
+				users.push({
+					id: doc.id,
+					...(doc.data() as UserData),
+				});
+			});
+			onUpdate(users);
+		},
+		(error) => {
+			console.error("Error in users subscription:", error);
+			onError?.(error);
+		},
+	);
 }

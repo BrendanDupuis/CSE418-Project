@@ -18,7 +18,6 @@ export function AuthRouter({ children }: Props) {
 		const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
 			// Define protected routes that require authentication and email verification
 			const clientSideProtectedRoutes = [
-				"/home",
 				"/messagePage",
 				"/friendPage",
 				"/homePage",
@@ -30,7 +29,7 @@ export function AuthRouter({ children }: Props) {
 			if (user && pathname === "/") {
 				// Check if email is verified before redirecting to home
 				if (user.emailVerified) {
-					router.replace("/home");
+					router.replace("/homePage");
 				} else {
 					// User is authenticated but email not verified, stay on landing page
 					// The login form will handle showing verification message

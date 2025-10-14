@@ -99,6 +99,10 @@ export function SingUpFrom() {
 				case "auth/invalid-email":
 					message = "Invalid email";
 					break;
+				case "auth/email-already-in-use":
+					message =
+						"An account with this email already exists. Please sign in instead.";
+					break;
 				case "auth/password-does-not-meet-requirements": {
 					message =
 						"Missing password requirements: [Password must contain at least 8 characters, Password must contain an upper case character, Password must contain a numeric character, Password must contain a non-alphanumeric character]";
