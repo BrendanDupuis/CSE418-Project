@@ -16,6 +16,17 @@ export function AuthRouter({ children }: Props) {
 
 	useEffect(() => {
 		const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+			// Define protected routes that require authentication and email verification
+			const clientSideProtectedRoutes = [
+				"/home",
+				"/messagePage",
+				"/friendPage",
+				"/homePage",
+			];
+			const isProtectedRoute = clientSideProtectedRoutes.some((route) =>
+				pathname?.startsWith(route),
+			);
+
 			if (user && pathname === "/") {
 				// Check if email is verified before redirecting to home
 				if (user.emailVerified) {
@@ -24,10 +35,10 @@ export function AuthRouter({ children }: Props) {
 					// User is authenticated but email not verified, stay on landing page
 					// The login form will handle showing verification message
 				}
-			} else if (!user && pathname?.startsWith("/home")) {
+			} else if (!user && isProtectedRoute) {
 				// User not authenticated, redirect to landing
 				router.replace("/");
-			} else if (user && pathname?.startsWith("/home") && !user.emailVerified) {
+			} else if (user && isProtectedRoute && !user.emailVerified) {
 				// User authenticated but email not verified, redirect to landing
 				router.replace("/");
 			}
