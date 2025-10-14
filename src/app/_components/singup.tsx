@@ -4,10 +4,16 @@ import {
 	createUserWithEmailAndPassword,
 	sendEmailVerification,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+	doc,
+	serverTimestamp,
+	setDoc,
+	type Timestamp,
+} from "firebase/firestore";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import type { UserData } from "@/lib/models/user";
 import { validatePassword } from "@/lib/password-validation";
 
 export function SingUpFrom() {
@@ -60,11 +66,13 @@ export function SingUpFrom() {
 			);
 
 			const { uid } = userCredentials.user;
-			await setDoc(doc(firebaseDb, "users", uid), {
+
+			const userData: UserData = {
 				username,
 				email,
-				createdAt: serverTimestamp(),
-			});
+				createdAt: serverTimestamp() as Timestamp,
+			};
+			await setDoc(doc(firebaseDb, "users", uid), userData);
 
 			await sendEmailVerification(userCredentials.user);
 
@@ -130,6 +138,19 @@ export function SingUpFrom() {
 					style={inputStyle}
 					required
 				/>
+				<div
+					style={{
+						marginTop: "0.5rem",
+						padding: "0.5rem",
+						backgroundColor: "#fef3c7",
+						border: "1px solid #f59e0b",
+						borderRadius: "4px",
+						fontSize: "0.9rem",
+					}}
+				>
+					<strong>Note:</strong> Your username cannot be changed after account
+					creation.
+				</div>
 			</div>
 
 			<div style={{ marginTop: 12 }}>
