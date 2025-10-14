@@ -9,6 +9,8 @@ import {
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
+import { sendVerificationCode } from "@/lib/twoFactorAuth";
+import { TwoFactorVerification } from "./two-factor-verification";
 
 type Props = {
 	onSuccess?: () => void;
@@ -23,11 +25,9 @@ export function LoginForm({ onSuccess }: Props) {
 	const [showResend, setShowResend] = useState(false);
 	const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-	// // ==================================================
-	// //2FA related states
-	// const [needs2FA, setNeeds2FA] = useState(false);
-	// const [userId, setUserId] = useState<string | null>(null);
-	// // ==================================================
+	//2FA related states
+	const [needs2FA, setNeeds2FA] = useState(false);
+	const [userId, setUserId] = useState<string | null>(null);
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
@@ -43,44 +43,48 @@ export function LoginForm({ onSuccess }: Props) {
 			return;
 		}
 
-		try {
-			const userCredential = await signInWithEmailAndPassword(
-				firebaseAuth,
-				email,
-				password,
+	try {
+		if (typeof window !== "undefined") {
+			window.sessionStorage.setItem("twoFactorPending", "true");
+		}
+
+		const userCredential = await signInWithEmailAndPassword(
+			firebaseAuth,
+			email,
+			password,
+		);
+
+		const user = userCredential.user;
+
+		if (!user.emailVerified) {
+			await signOut(firebaseAuth);
+			setShowResend(true);
+			setErr(
+				"Please verify your email address before signing in. Check your inbox for a verification email.",
 			);
-
-			const user = userCredential.user;
-
-			// Check if email is verified
-			if (!user.emailVerified) {
-				// Sign out the user since they can't access the app without verification
-				await signOut(firebaseAuth);
-
-				// Show verification message and resend button
-				setShowResend(true);
-				setErr(
-					"Please verify your email address before signing in. Check your inbox for a verification email.",
-				);
-				return;
+			setNeeds2FA(false);
+			setUserId(null);
+			if (typeof window !== "undefined") {
+				window.sessionStorage.removeItem("twoFactorPending");
 			}
+			return;
+		}
 
-			// Email is verified, proceed with login
-			onSuccess?.();
+			//Generate and send 2FA code via server API
+			await sendVerificationCode(user.uid, user.email || email);
 
-			// // ==================================================
-			// DISABLE 2FA
-			// //Generate and send 2FA code via server API
-			// await sendVerificationCode(user.uid, user.email || email);
+			setUserId(user.uid);
+			setNeeds2FA(true);
+			setOk("Verification code sent! Check your email.");
 
-			// setUserId(user.uid);
-			// setNeeds2FA(true);
-			// setOk("Verification code sent! Check your email.");
-
-			// //Temporarily sign out, wait for 2FA
-			// await firebaseAuth.signOut();
-			// // ==================================================
+			//Temporarily sign out, wait for 2FA
+			await firebaseAuth.signOut();
 		} catch (e: unknown) {
+			if (typeof window !== "undefined") {
+				window.sessionStorage.removeItem("twoFactorPending");
+			}
+			await firebaseAuth.signOut().catch(() => undefined);
+
 			let message = "Something went wrong.";
 			let code: string | undefined;
 			if (
@@ -107,13 +111,8 @@ export function LoginForm({ onSuccess }: Props) {
 	}
 
 	async function handleResendVerification() {
-		if (!email) {
-			setErr("Please enter your email address first.");
-			return;
-		}
-
 		try {
-			// First sign in to get the user, then send verification
+			//First sign in to get the user, then send verification
 			const userCredential = await signInWithEmailAndPassword(
 				firebaseAuth,
 				email,
@@ -125,16 +124,8 @@ export function LoginForm({ onSuccess }: Props) {
 				"Verification email sent! Please check your inbox. (Check your spam)",
 			);
 			setShowResend(false);
-			setErr(null); // Clear any previous error
-		} catch (error: unknown) {
-			let message = "Failed to send verification email. Please try again.";
-			if (typeof error === "object" && error !== null && "code" in error) {
-				const errObj = error as { code?: string };
-				if (errObj.code === "auth/invalid-credential") {
-					message = "Invalid email or password. Please check your credentials.";
-				}
-			}
-			setErr(message);
+		} catch {
+			setErr("Failed to send verification email. Please try again.");
 		}
 	}
 
@@ -165,37 +156,40 @@ export function LoginForm({ onSuccess }: Props) {
 		}
 	}
 
-	// ==================================================
-	// DISABLE 2FA
-	// async function handleResendCode() {
-	// 	if (!userId) return;
+	async function handleResendCode() {
+		if (!userId) return;
 
-	// 	try {
-	// 		await sendVerificationCode(userId, email);
-	// 		setOk("New verification code sent!");
-	// 	} catch (error: any) {
-	// 		setErr(error.message || "Failed to resend code");
-	// 	}
-	// }
+		try {
+			await sendVerificationCode(userId, email);
+			setOk("New verification code sent!");
+		} catch (error: any) {
+			setErr(error.message || "Failed to resend code");
+		}
+	}
 
-	// async function handle2FASuccess() {
-	// 	//Re-login after successful 2FA
-	// 	await signInWithEmailAndPassword(firebaseAuth, email, password);
-	// 	onSuccess?.();
-	// }
+	async function handle2FASuccess() {
+		if (typeof window !== "undefined") {
+			window.sessionStorage.removeItem("twoFactorPending");
+		}
 
-	// //If 2FA is needed, show 2FA component
-	// if (needs2FA && userId) {
-	// 	return (
-	// 		<TwoFactorVerification
-	// 			userId={userId}
-	// 			email={email}
-	// 			onSuccess={handle2FASuccess}
-	// 			onResend={handleResendCode}
-	// 		/>
-	// 	);
-	// }
-	// ==================================================
+		//Re-login after successful 2FA
+		await signInWithEmailAndPassword(firebaseAuth, email, password);
+		setNeeds2FA(false);
+		setUserId(null);
+		onSuccess?.();
+	}
+
+	//If 2FA is needed, show 2FA component
+	if (needs2FA && userId) {
+		return (
+			<TwoFactorVerification
+				userId={userId}
+				email={email}
+				onSuccess={handle2FASuccess}
+				onResend={handleResendCode}
+			/>
+		);
+	}
 
 	return (
 		<form

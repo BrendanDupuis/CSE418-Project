@@ -16,7 +16,9 @@ export function AuthRouter({ children }: Props) {
 
 	useEffect(() => {
 		const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-			// Define protected routes that require authentication and email verification
+			const isTwoFactorPending =
+				typeof window !== "undefined" &&
+				window.sessionStorage.getItem("twoFactorPending") === "true";
 			const clientSideProtectedRoutes = [
 				"/messagePage",
 				"/friendPage",
@@ -26,20 +28,26 @@ export function AuthRouter({ children }: Props) {
 				pathname?.startsWith(route),
 			);
 
-			if (user && pathname === "/") {
-				// Check if email is verified before redirecting to home
-				if (user.emailVerified) {
+			if (user && !isTwoFactorPending) {
+				const isEmailVerified = user.emailVerified;
+
+				if (pathname === "/" && isEmailVerified) {
+					// Redirect authenticated and verified users to home
 					router.replace("/homePage");
-				} else {
-					// User is authenticated but email not verified, stay on landing page
-					// The login form will handle showing verification message
+				} else if (isProtectedRoute && isEmailVerified === false) {
+					// Authenticated but not verified, send back to landing
+					router.replace("/");
 				}
-			} else if (!user && isProtectedRoute) {
-				// User not authenticated, redirect to landing
-				router.replace("/");
-			} else if (user && isProtectedRoute && !user.emailVerified) {
-				// User authenticated but email not verified, redirect to landing
-				router.replace("/");
+			} else if (!user) {
+				// Clear any stale 2FA flag when the user is signed out
+				if (typeof window !== "undefined") {
+					window.sessionStorage.removeItem("twoFactorPending");
+				}
+
+				if (isProtectedRoute) {
+					// User not authenticated, redirect to landing
+					router.replace("/");
+				}
 			}
 			setChecked(true);
 		});

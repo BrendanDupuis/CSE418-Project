@@ -51,38 +51,3 @@ export async function verifyCode(
 
 	return data.valid;
 }
-
-// Backward compatibility exports (deprecated - use sendVerificationCode instead)
-/**
- * @deprecated Use sendVerificationCode instead
- */
-export function generateVerificationCode(): string {
-	console.warn(
-		"generateVerificationCode is deprecated. Code generation now happens server-side.",
-	);
-	return "000000"; // Dummy value
-}
-
-/**
- * @deprecated Use sendVerificationCode instead
- */
-export async function storeVerificationCode(
-	userId: string,
-	code: string,
-): Promise<void> {
-	console.warn(
-		"storeVerificationCode is deprecated. Storage now happens server-side via sendVerificationCode.",
-	);
-}
-
-/**
- * @deprecated Use sendVerificationCode instead
- */
-export async function sendVerificationEmail(
-	email: string,
-	code: string,
-): Promise<void> {
-	console.warn(
-		"sendVerificationEmail is deprecated. Email sending now happens server-side via sendVerificationCode.",
-	);
-}

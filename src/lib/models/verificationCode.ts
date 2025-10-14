@@ -1,112 +1,138 @@
-// import { getDatabase } from "@/lib/mongodb";
+import { Timestamp } from "firebase-admin/firestore";
+import { getAdminFirestore } from "@/lib/firebase-admin";
+import { randomBytes } from "crypto";
 
-// /**
-//  * 2FA verification code data structure
-//  */
-// export interface VerificationCode {
-// 	userId: string; // Primary identifier
-// 	code: string;
-// 	expiresAt: Date;
-// 	createdAt: Date;
-// }
+/**
+ * 2FA verification code data structure
+ */
+export interface VerificationCode {
+	userId: string; // Primary identifier
+	code: string;
+	expiresAt: Timestamp;
+	createdAt: Timestamp;
+}
 
-// /**
-//  * Store verification code in MongoDB
-//  */
-// export async function storeVerificationCode(
-// 	userId: string,
-// 	code: string,
-// 	expirationMinutes = 10,
-// ): Promise<void> {
-// 	const db = await getDatabase();
-// 	const collection = db.collection<VerificationCode>("verification_codes");
+const COLLECTION_NAME = "verification_codes";
 
-// 	const now = new Date();
-// 	const expiresAt = new Date(now.getTime() + expirationMinutes * 60 * 1000);
+function getCollection() {
+	return getAdminFirestore().collection(COLLECTION_NAME);
+}
 
-// 	await collection.updateOne(
-// 		{ userId },
-// 		{
-// 			$set: {
-// 				code,
-// 				expiresAt,
-// 				createdAt: now,
-// 			},
-// 		},
-// 		{ upsert: true },
-// 	);
+/**
+ * Generate a secure random 6-digit verification code using Node.js crypto
+ */
+export function generateVerificationCode(): string {
+	// Generate 3 random bytes (24 bits) and convert to a 6-digit number
+	const bytes = randomBytes(3);
+	const num = bytes.readUIntBE(0, 3);
+	// Ensure it's 6 digits (100000-999999)
+	const code = (num % 900000) + 100000;
+	return code.toString();
+}
 
-// 	console.log(`[MongoDB VerificationStore] Stored code for user ${userId}`);
-// }
+/**
+ * Store verification code in Firestore
+ */
+export async function storeVerificationCode(
+	userId: string,
+	code: string,
+	expirationMinutes = 10,
+): Promise<void> {
+	const collectionRef = getCollection();
+	const now = Timestamp.now();
+	const expiresAt = Timestamp.fromMillis(
+		now.toMillis() + expirationMinutes * 60 * 1000,
+	);
 
-// /**
-//  * Get verification code from MongoDB
-//  */
-// export async function getVerificationCode(
-// 	userId: string,
-// ): Promise<VerificationCode | null> {
-// 	const db = await getDatabase();
-// 	const collection = db.collection<VerificationCode>("verification_codes");
+	await collectionRef.doc(userId).set({
+		userId,
+		code,
+		expiresAt,
+		createdAt: now,
+	});
 
-// 	const result = await collection.findOne({ userId });
+	console.log(`[Firestore VerificationStore] Stored code for user ${userId}`);
+}
 
-// 	console.log(
-// 		`[MongoDB VerificationStore] Retrieved code for user ${userId}: ${result ? "found" : "not found"}`,
-// 	);
+/**
+ * Get verification code from Firestore
+ */
+export async function getVerificationCode(
+	userId: string,
+): Promise<VerificationCode | null> {
+	const docSnap = await getCollection().doc(userId).get();
 
-// 	return result;
-// }
+	if (!docSnap.exists) {
+		console.log(
+			`[Firestore VerificationStore] Retrieved code for user ${userId}: not found`,
+		);
+		return null;
+	}
 
-// /**
-//  * Delete verification code from MongoDB
-//  */
-// export async function deleteVerificationCode(userId: string): Promise<boolean> {
-// 	const db = await getDatabase();
-// 	const collection = db.collection<VerificationCode>("verification_codes");
+	console.log(
+		`[Firestore VerificationStore] Retrieved code for user ${userId}: found`,
+	);
+	return docSnap.data() as VerificationCode;
+}
 
-// 	const result = await collection.deleteOne({ userId });
+/**
+ * Delete verification code from Firestore
+ */
+export async function deleteVerificationCode(userId: string): Promise<boolean> {
+	try {
+		await getCollection().doc(userId).delete();
+		console.log(
+			`[Firestore VerificationStore] Deleted code for user ${userId}: true`,
+		);
+		return true;
+	} catch (error) {
+		console.error(
+			`[Firestore VerificationStore] Error deleting code for user ${userId}:`,
+			error,
+		);
+		return false;
+	}
+}
 
-// 	console.log(
-// 		`[MongoDB VerificationStore] Deleted code for user ${userId}: ${result.deletedCount > 0}`,
-// 	);
+/**
+ * Verify if the code is valid and not expired
+ */
+export async function verifyCode(userId: string, code: string): Promise<boolean> {
+	const stored = await getVerificationCode(userId);
 
-// 	return result.deletedCount > 0;
-// }
+	if (!stored) {
+		return false;
+	}
 
-// /**
-//  * Verify if the code is valid and not expired
-//  */
-// export async function verifyCode(userId: string, code: string): Promise<boolean> {
-// 	const stored = await getVerificationCode(userId);
+	// Check if expired
+	const now = Timestamp.now();
+	if (stored.expiresAt.toMillis() < now.toMillis()) {
+		await deleteVerificationCode(userId);
+		return false;
+	}
 
-// 	if (!stored) {
-// 		return false;
-// 	}
+	// Check if code matches
+	return stored.code === code;
+}
 
-// 	// Check if expired
-// 	if (new Date() > stored.expiresAt) {
-// 		await deleteVerificationCode(userId);
-// 		return false;
-// 	}
+/**
+ * Clean up expired verification codes (run periodically)
+ */
+export async function cleanupExpiredCodes(): Promise<number> {
+	const now = Timestamp.now();
+	const querySnapshot = await getCollection()
+		.where("expiresAt", "<", now)
+		.get();
+	let deletedCount = 0;
 
-// 	// Check if code matches
-// 	return stored.code === code;
-// }
+	for (const document of querySnapshot.docs) {
+		await document.ref.delete();
+		deletedCount++;
+	}
 
-// /**
-//  * Clean up expired verification codes (run periodically)
-//  */
-// export async function cleanupExpiredCodes(): Promise<number> {
-// 	const db = await getDatabase();
-// 	const collection = db.collection<VerificationCode>("verification_codes");
+	console.log(
+		`[Firestore VerificationStore] Cleaned up ${deletedCount} expired codes`,
+	);
 
-// 	const result = await collection.deleteMany({
-// 		expiresAt: { $lt: new Date() },
-// 	});
-
-// 	console.log(
-// 		`[MongoDB VerificationStore] Cleaned up ${result.deletedCount} expired codes`,
-// 	);
-
-// 	return result.deletedCount;
-// }
+	return deletedCount;
+}
