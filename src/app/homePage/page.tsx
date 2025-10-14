@@ -1,43 +1,90 @@
 "use client";
 
-import Link from 'next/link';
-import React, { useState } from 'react';
-
-const name = "Ryan Mckee"; //placeholder will come from backend
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { firebaseAuth } from "@/lib/firebase";
+import { getUserData, type UserData } from "@/lib/models/user";
 
 export default function HomePage() {
-    const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+	const router = useRouter();
 
-    const handleDeleteAccount = () => {
-        console.log("Delete account requested");
-    };
+	const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+	const [userData, setUserData] = useState<UserData | null>(null);
+	const [loading, setLoading] = useState(true);
 
-    return (
-      
-        <div>
-            <h1>SecureDove Messaging App</h1>
-            <h2>Signed In As: {name}</h2>
-            <nav>
-                <Link href="/friendPage">Go to Friends</Link>
-            </nav>
-            
-            <div>
-                <h3>Account Settings</h3>
-                <button onClick={() => setShowDeleteAccount(!showDeleteAccount)} >
-                    Delete Account
-                </button>
-                
-                {showDeleteAccount && (
-                    <div>
-                        <p>Are you sure you want to delete your account?</p>
-                        <div >
-                            <button onClick={handleDeleteAccount}>Yes/</button>
-                            <button onClick={() => setShowDeleteAccount(false)} >No</button>
-                        </div>
-                    </div>
-                )}
-            </div>
-            <style jsx>{`
+	const handleDeleteAccount = () => {
+		console.log("Delete account requested");
+	};
+
+	useEffect(() => {
+		const fetchUserData = async () => {
+			const user = firebaseAuth.currentUser;
+			if (user) {
+				const data = await getUserData(user.uid);
+				setUserData(data);
+			}
+			setLoading(false);
+		};
+
+		fetchUserData();
+	}, []);
+
+	if (loading) {
+		return (
+			<div>
+				<h1>SecureDove Messaging App</h1>
+				<p>Loading...</p>
+			</div>
+		);
+	}
+
+	if (!userData) {
+		router.replace("/");
+		return;
+	}
+
+	return (
+		<div>
+			<h1>SecureDove Messaging App</h1>
+			<h2>Signed In As: {userData.username}</h2>
+			{userData && (
+				<div style={{ marginBottom: "1rem", color: "#666" }}>
+					<p>Email: {userData.email}</p>
+					<p>
+						Member since:{" "}
+						{userData.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"}
+					</p>
+				</div>
+			)}
+			<nav>
+				<Link href="/friendPage">Go to Friends</Link>
+			</nav>
+
+			<div>
+				<h3>Account Settings</h3>
+				<button
+					type="button"
+					onClick={() => setShowDeleteAccount(!showDeleteAccount)}
+				>
+					Delete Account
+				</button>
+
+				{showDeleteAccount && (
+					<div>
+						<p>Are you sure you want to delete your account?</p>
+						<div>
+							<button type="button" onClick={handleDeleteAccount}>
+								Yes
+							</button>
+							<button type="button" onClick={() => setShowDeleteAccount(false)}>
+								No
+							</button>
+						</div>
+					</div>
+				)}
+			</div>
+			<style jsx>{`
               *{
               text-align: center;
               }
@@ -69,7 +116,6 @@ export default function HomePage() {
                 
                 
             `}</style>
-          
-        </div>
-    );
+		</div>
+	);
 }

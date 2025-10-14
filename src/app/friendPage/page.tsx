@@ -1,35 +1,99 @@
 "use client";
 
-import Link from 'next/link';
-import React from 'react';
-
-//placeholder data will come from backend
-const friends = [
-    { id: 1, name: "Friend1" },
-    { id: 2, name: "Friend2"},
-    { id: 3, name: "Friend3" },
-    { id: 4, name: "Friend4"}
-];
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { firebaseAuth } from "@/lib/firebase";
+import { generateChatId } from "@/lib/models/chat";
+import { getAllUsers, type UserWithId } from "@/lib/models/user";
 
 export default function FriendsPage() {
-    return (
-        <div>
-            
-            <header>
-                <Link href="/homePage">Home</Link>
-                <h1>My Messages</h1>
-            </header>
-            
-            <div >
-                {friends.map((friend) => (
-                    <Link href={`/messagePage/${friend.id}`} key={friend.id}>
-                        <div>
-                            <h3>{friend.name}</h3>
-                        </div>
-                    </Link>
-                ))}
-            </div>
-            <style jsx>{`
+	const [users, setUsers] = useState<UserWithId[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+	const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+	useEffect(() => {
+		const fetchUsers = async () => {
+			try {
+				setLoading(true);
+				setError(null);
+
+				// Get current user ID
+				const currentUser = firebaseAuth.currentUser;
+				if (currentUser) {
+					setCurrentUserId(currentUser.uid);
+				}
+
+				const usersData = await getAllUsers();
+				setUsers(usersData);
+			} catch (err) {
+				console.error("Error fetching users:", err);
+				setError("Failed to load users. Please try again.");
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchUsers();
+	}, []);
+
+	if (loading) {
+		return (
+			<div>
+				<header>
+					<Link href="/homePage">Home</Link>
+					<h1>My Messages</h1>
+				</header>
+				<div>
+					<p>Loading users...</p>
+				</div>
+			</div>
+		);
+	}
+
+	if (error || !currentUserId) {
+		return (
+			<div>
+				<header>
+					<Link href="/homePage">Home</Link>
+					<h1>My Messages</h1>
+				</header>
+				<div>
+					<p style={{ color: "red" }}>{error}</p>
+					<button type="button" onClick={() => window.location.reload()}>
+						Retry
+					</button>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div>
+			<header>
+				<Link href="/homePage">Home</Link>
+				<h1>Users</h1>
+			</header>
+
+			<div>
+				{users.length === 0 ? (
+					<p>No users found.</p>
+				) : (
+					users.map((user) => (
+						<Link
+							href={`/messagePage/${generateChatId(currentUserId, user.id)}`}
+							key={user.id}
+						>
+							<div>
+								<h3>
+									{user.username} ({user.email})
+								</h3>
+							</div>
+						</Link>
+					))
+				)}
+			</div>
+			<style jsx>{`
               *{
               text-align: center;
               }
@@ -58,6 +122,6 @@ export default function FriendsPage() {
                 }
               
             `}</style>
-        </div>
-    );
+		</div>
+	);
 }
