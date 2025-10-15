@@ -7,8 +7,9 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
 import { chatIdToUserIds } from "@/lib/models/chat";
-import { createChatDocument, getChatDocument, type MessageWithId, sendMessage, subscribeToMessages } from "@/lib/models/message";
+import { createChatDocument, ensureUserHasChatKeys, getChatDocument, type MessageWithId, sendMessage, subscribeToKeyChanges, subscribeToMessages } from "@/lib/models/message";
 import { getUserData, type UserWithId } from "@/lib/models/user";
+import { getPasswordHash } from "@/lib/password-hash";
 import { AuthenticatedLayout } from "../../_components/authenticated-layout";
 
 export default function MessagesPage() {
@@ -21,6 +22,7 @@ export default function MessagesPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [currentUser, setCurrentUser] = useState<UserWithId | null>(null);
 	const [friendUser, setFriendUser] = useState<UserWithId | null>(null);
+	const [bothUsersHaveKeys, setBothUsersHaveKeys] = useState<boolean>(true);
 
 	useEffect(() => {
 		const fetchUsersAndMessages = async () => {
@@ -41,6 +43,14 @@ export default function MessagesPage() {
 					getUserData(userId2).then((data) => (data ? { id: userId2, ...data } : null)),
 				]);
 
+				const passwordHash = getPasswordHash();
+				if (!passwordHash) {
+					setError("Password hash not found. Please log in again.");
+					return;
+				}
+
+				let unsubscribeKeys: (() => void) | null = null;
+
 				// Determine which user is current and which is friend
 				if (user1Data && user2Data) {
 					if (user1Data.id === currentFirebaseUser.uid) {
@@ -53,16 +63,29 @@ export default function MessagesPage() {
 
 					const chatDoc = await getChatDocument(chatID);
 					if (!chatDoc) {
-						await createChatDocument(chatID, userId1, userId2);
+						await createChatDocument(chatID, userId1, userId2, passwordHash);
+					} else {
+						await ensureUserHasChatKeys(chatID, currentFirebaseUser.uid, passwordHash);
 					}
+
+					unsubscribeKeys = subscribeToKeyChanges(
+						chatID,
+						(keyStatus) => {
+							setBothUsersHaveKeys(keyStatus.bothHaveKeys);
+						},
+						(err) => {
+							console.error("Error in key subscription:", err);
+						},
+					);
 				} else {
 					setError("Could not find users for this chat");
 					return;
 				}
 
-				// Set up real-time message subscription
 				const unsubscribe = subscribeToMessages(
 					chatID,
+					currentFirebaseUser.uid,
+					passwordHash,
 					(messagesData) => {
 						setMessages(messagesData);
 						setLoading(false);
@@ -74,9 +97,9 @@ export default function MessagesPage() {
 					},
 				);
 
-				// Cleanup subscription on unmount
 				return () => {
 					unsubscribe();
+					unsubscribeKeys?.();
 				};
 			} catch (err) {
 				console.error("Error fetching users and messages:", err);
@@ -94,7 +117,12 @@ export default function MessagesPage() {
 		e.preventDefault();
 		if (newMessage.trim() && currentUser && friendUser) {
 			try {
-				await sendMessage(newMessage, currentUser.id, chatID);
+				const passwordHash = getPasswordHash();
+				if (!passwordHash) {
+					setError("Password hash not found. Please log in again.");
+					return;
+				}
+				await sendMessage(newMessage, currentUser.id, chatID, passwordHash);
 				setNewMessage("");
 			} catch (err) {
 				console.error("Error sending message:", err);
@@ -140,25 +168,45 @@ export default function MessagesPage() {
 		<>
 			<AuthenticatedLayout title={friendUser.username} showBackButton backHref="/friendPage">
 				<div>
-					{messages.length === 0 ? (
+					{!bothUsersHaveKeys && (
+						<div
+							style={{
+								backgroundColor: "#fff3cd",
+								border: "1px solid #ffeaa7",
+								borderRadius: "4px",
+								padding: "12px",
+								marginBottom: "16px",
+								color: "#856404",
+							}}
+						>
+							<p>
+								<strong>⚠️ Waiting for {friendUser.username}</strong>
+							</p>
+							<p>End-to-end encryption is not yet available. {friendUser.username} needs to open this chat to generate their encryption keys.</p>
+						</div>
+					)}
+
+					{messages.length === 0 && bothUsersHaveKeys ? (
 						<p>No messages yet. Start the conversation!</p>
-					) : (
+					) : messages.length > 0 ? (
 						messages.map((message) => (
 							<div key={message.id} className={`message ${message.fromUserId === currentUser.id ? "message-me" : "message-them"}`}>
 								<div>
 									<span className="sender-name">{message.fromUserId === currentUser.id ? currentUser.username : friendUser.username}:</span>
-									<span>{message.text}</span>
+									<span> {message.text} </span>
 									<span className="timestamp">{message.timestamp?.toDate?.()?.toLocaleTimeString() || "Unknown time"}</span>
 								</div>
 							</div>
 						))
-					)}
+					) : null}
 				</div>
 
-				<form onSubmit={handleSendMessage}>
-					<input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." />
-					<button type="submit">Send</button>
-				</form>
+				{bothUsersHaveKeys && (
+					<form onSubmit={handleSendMessage}>
+						<input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." />
+						<button type="submit">Send</button>
+					</form>
+				)}
 			</AuthenticatedLayout>
 			<style jsx>{`
               *{

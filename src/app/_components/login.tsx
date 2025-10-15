@@ -4,6 +4,7 @@ import { sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPasswo
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
+import { storePasswordHash } from "@/lib/password-hash";
 import { sendVerificationCode } from "@/lib/twoFactorAuth";
 import { TwoFactorVerification } from "./two-factor-verification";
 
@@ -47,6 +48,8 @@ export function LoginForm({ onSuccess }: Props) {
 
 			const user = userCredential.user;
 
+			await storePasswordHash(password);
+
 			if (!user.emailVerified) {
 				await signOut(firebaseAuth);
 				setShowResend(true);
@@ -59,14 +62,12 @@ export function LoginForm({ onSuccess }: Props) {
 				return;
 			}
 
-			//Generate and send 2FA code via server API
 			await sendVerificationCode(user.uid, user.email || email);
 
 			setUserId(user.uid);
 			setNeeds2FA(true);
 			setOk("Verification code sent! Check your email.");
 
-			//Temporarily sign out, wait for 2FA
 			await firebaseAuth.signOut();
 		} catch (e: unknown) {
 			if (typeof window !== "undefined") {
@@ -140,8 +141,9 @@ export function LoginForm({ onSuccess }: Props) {
 		try {
 			await sendVerificationCode(userId, email);
 			setOk("New verification code sent!");
-		} catch (error: any) {
-			setErr(error.message || "Failed to resend code");
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : "Failed to resend code";
+			setErr(message);
 		}
 	}
 

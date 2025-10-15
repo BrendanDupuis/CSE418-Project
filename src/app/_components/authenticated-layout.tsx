@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { usePasswordHashMonitor } from "@/lib/use-password-hash-monitor";
 import { LogoutButton } from "./logout-button";
 
 interface AuthenticatedLayoutProps {
@@ -11,6 +12,8 @@ interface AuthenticatedLayoutProps {
 }
 
 export function AuthenticatedLayout({ children, title, showBackButton = false, backHref }: AuthenticatedLayoutProps) {
+	usePasswordHashMonitor();
+
 	return (
 		<div>
 			<header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>

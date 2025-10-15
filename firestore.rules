@@ -91,10 +91,11 @@ service cloud.firestore {
         allow read: if isChatParticipant(chatId);
 
         allow create: if isChatParticipant(chatId)
-          && request.resource.data.keys().hasOnly(['text', 'fromUserId', 'timestamp'])
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 5000
+          && request.resource.data.keys().hasOnly(['senderEncryptedText', 'receiverEncryptedText', 'fromUserId', 'timestamp'])
+          && request.resource.data.senderEncryptedText is string
+          && request.resource.data.senderEncryptedText.size() > 0
+          && request.resource.data.receiverEncryptedText is string
+          && request.resource.data.receiverEncryptedText.size() > 0
           && request.resource.data.fromUserId is string
           && request.resource.data.timestamp is timestamp
           && request.auth.uid == request.resource.data.fromUserId;
@@ -103,6 +104,51 @@ service cloud.firestore {
 
         allow delete: if isChatParticipant(chatId)
           && request.auth.uid == resource.data.fromUserId;
+      }
+
+      match /publicKeys/{userId} {
+        allow read: if isChatParticipant(chatId);
+
+        allow create: if isChatParticipant(chatId)
+          && request.resource.data.keys().hasOnly(['userId', 'publicKey', 'createdAt', 'updatedAt'])
+          && request.resource.data.userId is string
+          && request.resource.data.userId == userId
+          && request.resource.data.publicKey is map
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.updatedAt is timestamp
+          && request.auth.uid == userId;
+
+        allow update: if isChatParticipant(chatId)
+          && request.resource.data.keys().hasOnly(['publicKey', 'updatedAt'])
+          && request.resource.data.publicKey is map
+          && request.resource.data.updatedAt is timestamp
+          && request.auth.uid == userId;
+
+        allow delete: if isChatParticipant(chatId)
+          && request.auth.uid == userId;
+      }
+
+      match /privateKeys/{userId} {
+        allow read: if isChatParticipant(chatId)
+          && request.auth.uid == userId;
+
+        allow create: if isChatParticipant(chatId)
+          && request.resource.data.keys().hasOnly(['userId', 'encryptedPrivateKey', 'createdAt', 'updatedAt'])
+          && request.resource.data.userId is string
+          && request.resource.data.userId == userId
+          && request.resource.data.encryptedPrivateKey is string
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.updatedAt is timestamp
+          && request.auth.uid == userId;
+
+        allow update: if isChatParticipant(chatId)
+          && request.resource.data.keys().hasOnly(['encryptedPrivateKey', 'updatedAt'])
+          && request.resource.data.encryptedPrivateKey is string
+          && request.resource.data.updatedAt is timestamp
+          && request.auth.uid == userId;
+
+        allow delete: if isChatParticipant(chatId)
+          && request.auth.uid == userId;
       }
     }
 

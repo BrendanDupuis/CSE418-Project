@@ -1,19 +1,12 @@
 "use client";
 
-import {
-	createUserWithEmailAndPassword,
-	sendEmailVerification,
-} from "firebase/auth";
-import {
-	doc,
-	serverTimestamp,
-	setDoc,
-	type Timestamp,
-} from "firebase/firestore";
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import type { UserData } from "@/lib/models/user";
+import { storePasswordHash } from "@/lib/password-hash";
 import { validatePassword } from "@/lib/password-validation";
 
 export function SingUpFrom() {
@@ -59,13 +52,11 @@ export function SingUpFrom() {
 			setPassword("");
 			setPassword2("");
 
-			const userCredentials = await createUserWithEmailAndPassword(
-				firebaseAuth,
-				email,
-				password,
-			);
+			const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
 
 			const { uid } = userCredentials.user;
+
+			await storePasswordHash(password);
 
 			const userData: UserData = {
 				username,
@@ -76,18 +67,11 @@ export function SingUpFrom() {
 
 			await sendEmailVerification(userCredentials.user);
 
-			setOk(
-				"Sign up complete! Please check your email to verify your account.",
-			);
+			setOk("Sign up complete! Please check your email to verify your account.");
 		} catch (e: unknown) {
 			let message = "Something went wrong.";
 			let code: string | undefined;
-			if (
-				typeof e === "object" &&
-				e !== null &&
-				"message" in e &&
-				"code" in e
-			) {
+			if (typeof e === "object" && e !== null && "message" in e && "code" in e) {
 				const errObj = e as { message?: string; code?: string };
 				message = errObj.message ?? message;
 				code = errObj.code;
@@ -100,8 +84,7 @@ export function SingUpFrom() {
 					message = "Invalid email";
 					break;
 				case "auth/email-already-in-use":
-					message =
-						"An account with this email already exists. Please sign in instead.";
+					message = "An account with this email already exists. Please sign in instead.";
 					break;
 				case "auth/password-does-not-meet-requirements": {
 					message =
@@ -126,22 +109,13 @@ export function SingUpFrom() {
 			}}
 			noValidate
 		>
-			<p style={{ marginTop: 6, color: "gray" }}>
-				Use your email and password to sign in.
-			</p>
+			<p style={{ marginTop: 6, color: "gray" }}>Use your email and password to sign in.</p>
 
 			<div style={{ marginTop: 12 }}>
 				<label htmlFor="username" style={{ display: "block", marginBottom: 6 }}>
 					Username
 				</label>
-				<input
-					id="username"
-					type="text"
-					value={username}
-					onChange={(e) => setUsername(e.target.value)}
-					style={inputStyle}
-					required
-				/>
+				<input id="username" type="text" value={username} onChange={(e) => setUsername(e.target.value)} style={inputStyle} required />
 				<div
 					style={{
 						marginTop: "0.5rem",
@@ -152,8 +126,7 @@ export function SingUpFrom() {
 						fontSize: "0.9rem",
 					}}
 				>
-					<strong>Note:</strong> Your username cannot be changed after account
-					creation.
+					<strong>Note:</strong> Your username cannot be changed after account creation.
 				</div>
 			</div>
 
@@ -161,15 +134,7 @@ export function SingUpFrom() {
 				<label htmlFor="email" style={{ display: "block", marginBottom: 6 }}>
 					Email
 				</label>
-				<input
-					id="email"
-					type="email"
-					autoComplete="email"
-					value={email}
-					onChange={(e) => setEmail(e.target.value)}
-					style={inputStyle}
-					required
-				/>
+				<input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
 			</div>
 
 			<div style={{ marginTop: 12 }}>
@@ -187,22 +152,14 @@ export function SingUpFrom() {
 						required
 						minLength={8}
 					/>
-					<button
-						type="button"
-						onClick={() => setShow((s) => !s)}
-						style={linkButton}
-						aria-pressed={show}
-					>
+					<button type="button" onClick={() => setShow((s) => !s)} style={linkButton} aria-pressed={show}>
 						{show ? "Hide" : "Show"}
 					</button>
 				</div>
 			</div>
 
 			<div style={{ marginTop: 12 }}>
-				<label
-					htmlFor="confirm_password"
-					style={{ display: "block", marginBottom: 6 }}
-				>
+				<label htmlFor="confirm_password" style={{ display: "block", marginBottom: 6 }}>
 					Confirm password
 				</label>
 				<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -217,9 +174,7 @@ export function SingUpFrom() {
 						minLength={8}
 					/>
 				</div>
-				<div style={{ color: "#b91c1c", minHeight: 20, marginTop: 4 }}>
-					{err}
-				</div>
+				<div style={{ color: "#b91c1c", minHeight: 20, marginTop: 4 }}>{err}</div>
 			</div>
 
 			<div style={{ display: "flex", gap: 8, marginTop: 8 }}>
