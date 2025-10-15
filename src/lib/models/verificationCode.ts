@@ -1,6 +1,6 @@
 import "server-only";
 
-import { clearFirestoreCache, getAdminFirestore } from "@/lib/firebase-admin";
+import { getAdminFirestore } from "@/lib/firebase-admin";
 
 export interface VerificationCode {
 	userId: string;
@@ -39,55 +39,24 @@ export async function hashVerificationCode(code: string): Promise<string> {
 }
 
 export async function storeVerificationCode(userId: string, code: string, expirationMinutes = 10): Promise<void> {
-	try {
-		const db = await getAdminFirestore();
-		const now = new Date();
-		const expiresAt = new Date(now.getTime() + expirationMinutes * 60 * 1000);
-		const codeHash = await hashVerificationCode(code);
+	const db = await getAdminFirestore();
+	const now = new Date();
+	const expiresAt = new Date(now.getTime() + expirationMinutes * 60 * 1000);
+	const codeHash = await hashVerificationCode(code);
 
-		const docRef = db.doc(`${COLLECTION_NAME}/${userId}`);
-		const response = await docRef.set({
-			userId,
-			codeHash,
-			expiresAt: expiresAt.toISOString(),
-			createdAt: now.toISOString(),
-		});
+	const docRef = db.doc(`${COLLECTION_NAME}/${userId}`);
+	const response = await docRef.set({
+		userId,
+		codeHash,
+		expiresAt: expiresAt.toISOString(),
+		createdAt: now.toISOString(),
+	});
 
-		if (response.error) {
-			throw new Error(`Failed to store verification code: ${response.error}`);
-		}
-
-		console.log(`[Firestore VerificationStore] Stored code hash for user ${userId}`);
-	} catch (error) {
-		if (
-			error instanceof Error &&
-			(error.message.includes("authentication credentials") || error.message.includes("OAuth 2 access token") || error.message.includes("401") || error.message.includes("403"))
-		) {
-			console.log("Authentication error in storeVerificationCode, clearing cache and retrying...");
-			clearFirestoreCache();
-
-			const db = await getAdminFirestore();
-			const now = new Date();
-			const expiresAt = new Date(now.getTime() + expirationMinutes * 60 * 1000);
-			const codeHash = await hashVerificationCode(code);
-
-			const docRef = db.doc(`${COLLECTION_NAME}/${userId}`);
-			const response = await docRef.set({
-				userId,
-				codeHash,
-				expiresAt: expiresAt.toISOString(),
-				createdAt: now.toISOString(),
-			});
-
-			if (response.error) {
-				throw new Error(`Failed to store verification code after retry: ${response.error}`);
-			}
-
-			console.log(`[Firestore VerificationStore] Stored code hash for user ${userId} (after retry)`);
-		} else {
-			throw error;
-		}
+	if (response.error) {
+		throw new Error(`Failed to store verification code: ${response.error}`);
 	}
+
+	console.log(`[Firestore VerificationStore] Stored code hash for user ${userId}`);
 }
 
 export async function getVerificationCode(userId: string): Promise<VerificationCode | null> {

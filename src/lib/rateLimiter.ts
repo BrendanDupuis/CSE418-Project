@@ -1,5 +1,5 @@
 import "server-only";
-import { clearFirestoreCache, getAdminFirestore } from "@/lib/firebase-admin";
+import { getAdminFirestore } from "@/lib/firebase-admin";
 
 interface RateLimitEntry {
 	count: number;
@@ -143,86 +143,6 @@ export async function checkRateLimit(key: string, config: RateLimitConfig): Prom
 		}
 	} catch (error) {
 		console.error("Rate limit check failed:", error);
-
-		if (
-			error instanceof Error &&
-			(error.message.includes("authentication credentials") || error.message.includes("OAuth 2 access token") || error.message.includes("401") || error.message.includes("403"))
-		) {
-			console.log("Authentication error detected, clearing Firestore cache and retrying...");
-			clearFirestoreCache();
-
-			try {
-				const db = await getAdminFirestore();
-				const docRef = db.doc(`rate_limits/${key}`);
-				// biome-ignore lint/suspicious/noExplicitAny: Firebase REST API response type
-				const docSnap: any = await docRef.get();
-
-				if (!docSnap || !docSnap.exists()) {
-					const entry: RateLimitEntry = {
-						count: 1,
-						resetTime: new Date(now + config.windowMs).toISOString(),
-						lastAttempt: new Date(now).toISOString(),
-					};
-					await docRef.set(entry);
-					return {
-						isAllowed: true,
-						remaining: config.maxAttempts - 1,
-						resetTime: now + config.windowMs,
-					};
-				}
-
-				const data = docSnap?.data() as RateLimitEntry;
-				if (!data) {
-					const entry: RateLimitEntry = {
-						count: 1,
-						resetTime: new Date(now + config.windowMs).toISOString(),
-						lastAttempt: new Date(now).toISOString(),
-					};
-					await docRef.set(entry);
-					return {
-						isAllowed: true,
-						remaining: config.maxAttempts - 1,
-						resetTime: now + config.windowMs,
-					};
-				}
-
-				const storedResetTime = new Date(data.resetTime).getTime();
-				if (now > storedResetTime) {
-					await docRef.set({
-						count: 1,
-						resetTime: new Date(now + config.windowMs).toISOString(),
-						lastAttempt: new Date(now).toISOString(),
-					});
-					return {
-						isAllowed: true,
-						remaining: config.maxAttempts - 1,
-						resetTime: now + config.windowMs,
-					};
-				}
-
-				if (data.count >= config.maxAttempts) {
-					return {
-						isAllowed: false,
-						remaining: 0,
-						resetTime: storedResetTime,
-					};
-				}
-
-				await docRef.update({
-					count: data.count + 1,
-					lastAttempt: new Date(now).toISOString(),
-				});
-
-				return {
-					isAllowed: true,
-					remaining: config.maxAttempts - (data.count + 1),
-					resetTime: storedResetTime,
-				};
-			} catch (retryError) {
-				console.error("Retry after cache clear also failed:", retryError);
-			}
-		}
-
 		return {
 			isAllowed: true,
 			remaining: config.maxAttempts,
