@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
 import { generateChatId } from "@/lib/models/chat";
 import { subscribeToUsers, type UserWithId } from "@/lib/models/user";
+import { AuthenticatedLayout } from "../_components/authenticated-layout";
 
 export default function FriendsPage() {
 	const [users, setUsers] = useState<UserWithId[]>([]);
@@ -22,9 +23,7 @@ export default function FriendsPage() {
 		// Set up real-time subscription to users
 		const unsubscribe = subscribeToUsers(
 			(usersData) => {
-				const otherUsers = usersData.filter(
-					(user) => user.id !== currentUserId,
-				);
+				const otherUsers = usersData.filter((user) => user.id !== currentUserId);
 				setUsers(otherUsers);
 				setLoading(false);
 				setError(null);
@@ -44,60 +43,46 @@ export default function FriendsPage() {
 
 	if (loading) {
 		return (
-			<div>
-				<header>
-					<Link href="/homePage">Home</Link>
-					<h1>My Messages</h1>
-				</header>
+			<AuthenticatedLayout title="My Messages" showBackButton backHref="/homePage">
 				<div>
 					<p>Loading users...</p>
 				</div>
-			</div>
+			</AuthenticatedLayout>
 		);
 	}
 
 	if (error || !currentUserId) {
 		return (
-			<div>
-				<header>
-					<Link href="/homePage">Home</Link>
-					<h1>My Messages</h1>
-				</header>
+			<AuthenticatedLayout title="My Messages" showBackButton backHref="/homePage">
 				<div>
 					<p style={{ color: "red" }}>{error}</p>
 					<button type="button" onClick={() => window.location.reload()}>
 						Retry
 					</button>
 				</div>
-			</div>
+			</AuthenticatedLayout>
 		);
 	}
 
 	return (
-		<div>
-			<header>
-				<Link href="/homePage">Home</Link>
-				<h1>Users</h1>
-			</header>
-
-			<div>
-				{users.length === 0 ? (
-					<p>No users found.</p>
-				) : (
-					users.map((user) => (
-						<Link
-							href={`/messagePage/${generateChatId(currentUserId, user.id)}`}
-							key={user.id}
-						>
-							<div>
-								<h3>
-									{user.username} ({user.email})
-								</h3>
-							</div>
-						</Link>
-					))
-				)}
-			</div>
+		<>
+			<AuthenticatedLayout title="Users" showBackButton backHref="/homePage">
+				<div>
+					{users.length === 0 ? (
+						<p>No users found.</p>
+					) : (
+						users.map((user) => (
+							<Link href={`/messagePage/${generateChatId(currentUserId, user.id)}`} key={user.id}>
+								<div>
+									<h3>
+										{user.username} ({user.email})
+									</h3>
+								</div>
+							</Link>
+						))
+					)}
+				</div>
+			</AuthenticatedLayout>
 			<style jsx>{`
               *{
               text-align: center;
@@ -127,6 +112,6 @@ export default function FriendsPage() {
                 }
               
             `}</style>
-		</div>
+		</>
 	);
 }

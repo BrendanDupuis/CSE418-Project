@@ -9,46 +9,45 @@ it easy for us to encrypt and decrypt, but near impossible for others to decrypt
 
 Messages are now stored in MongoDB for persistence and security.
 */
-import { getPublicKey, getPrivateKey } from './keyGen.js';
-import { storeEncryptedMessage } from '@/lib/models/encryptedMessage';
 
-export { getConversation, getMessagesForUser, getUnreadCount, markMessageAsRead, deleteMessage } from '@/lib/models/encryptedMessage';
+import { storeEncryptedMessage } from "@/lib/models/encryptedMessage";
+import { getPrivateKey, getPublicKey } from "./keyGen";
 
+export { deleteMessage, getConversation, getMessagesForUser, getUnreadCount, markMessageAsRead } from "@/lib/models/encryptedMessage";
 
-
-async function makeSharedKey(myPrivateKey,theirPublicKey){
-    const findSharedBits = await crypto.subtle.deriveBits({ name: "ECDH", public: theirPublicKey },myPrivateKey,256);
-    const makeSharedKey = await crypto.subtle.importKey("raw",findSharedBits,{ name: "AES-GCM" },false,["encrypt", "decrypt"]);
-    return makeSharedKey;
-    //This shared key is the same as myPublicKey, theirPrivateKey by using this function 
+async function makeSharedKey(myPrivateKey, theirPublicKey) {
+	const findSharedBits = await crypto.subtle.deriveBits({ name: "ECDH", public: theirPublicKey }, myPrivateKey, 256);
+	const makeSharedKey = await crypto.subtle.importKey("raw", findSharedBits, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+	return makeSharedKey;
+	//This shared key is the same as myPublicKey, theirPrivateKey by using this function
 }
 
-export async function encryptMessages(sendersUserName,receiversUserName, messageToEncrypt, password) {
-    //Pass in their public key so I know where its going, and I can access my private key
-    const myPrivateKey = await getPrivateKey(sendersUserName,password);
-    const receiversPublicKey = await getPublicKey(receiversUserName);
-    const sharedKey = await makeSharedKey(myPrivateKey,receiversPublicKey);
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encoded = new TextEncoder().encode(messageToEncrypt);
-    const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv },sharedKey,encoded);
-    const ivArray = Array.from(iv); //iv as an array instead of Uint8Array
-    const ciphertextArray = Array.from(new Uint8Array(ciphertext)); //ciphertext into an array
-    const encryptedObject = {iv: ivArray,ciphertext: ciphertextArray};
+export async function encryptMessages(sendersUserName, receiversUserName, messageToEncrypt, password) {
+	//Pass in their public key so I know where its going, and I can access my private key
+	const myPrivateKey = await getPrivateKey(sendersUserName, password);
+	const receiversPublicKey = await getPublicKey(receiversUserName);
+	const sharedKey = await makeSharedKey(myPrivateKey, receiversPublicKey);
+	const iv = crypto.getRandomValues(new Uint8Array(12));
+	const encoded = new TextEncoder().encode(messageToEncrypt);
+	const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, sharedKey, encoded);
+	const ivArray = Array.from(iv); //iv as an array instead of Uint8Array
+	const ciphertextArray = Array.from(new Uint8Array(ciphertext)); //ciphertext into an array
+	const encryptedObject = { iv: ivArray, ciphertext: ciphertextArray };
 
-    // Store the encrypted message in MongoDB
-    await storeEncryptedMessage(sendersUserName, receiversUserName, encryptedObject);
+	// Store the encrypted message in MongoDB
+	await storeEncryptedMessage(sendersUserName, receiversUserName, encryptedObject);
 
-    return encryptedObject;
+	return encryptedObject;
 }
 
-export async function decryptMessages(sendersUserName,receiversUserName, messageToDecrypt,password) {
-    //decrypt using the key provided and the encrypted message
-    const myPrivateKey = await getPrivateKey(receiversUserName,password);
-    const sendersPublicKey = await getPublicKey(sendersUserName);
-    const sharedKey = await makeSharedKey(myPrivateKey,sendersPublicKey);
-    const iv = new Uint8Array(messageToDecrypt.iv);
-    const ciphertext = new Uint8Array(messageToDecrypt.ciphertext);
-    const decryptedEncoded = await crypto.subtle.decrypt({ name: "AES-GCM", iv },sharedKey,ciphertext.buffer);
-    const decodedMessage = new TextDecoder().decode(decryptedEncoded);
-    return decodedMessage;
+export async function decryptMessages(sendersUserName, receiversUserName, messageToDecrypt, password) {
+	//decrypt using the key provided and the encrypted message
+	const myPrivateKey = await getPrivateKey(receiversUserName, password);
+	const sendersPublicKey = await getPublicKey(sendersUserName);
+	const sharedKey = await makeSharedKey(myPrivateKey, sendersPublicKey);
+	const iv = new Uint8Array(messageToDecrypt.iv);
+	const ciphertext = new Uint8Array(messageToDecrypt.ciphertext);
+	const decryptedEncoded = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, sharedKey, ciphertext.buffer);
+	const decodedMessage = new TextDecoder().decode(decryptedEncoded);
+	return decodedMessage;
 }

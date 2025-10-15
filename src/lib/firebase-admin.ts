@@ -1,44 +1,25 @@
 import "server-only";
 
-import { cert, getApps, initializeApp } from "firebase-admin/app";
-import { Firestore, getFirestore } from "firebase-admin/firestore";
+import { type FirestoreOperations, initFirebaseRest } from "@/lib/firebase-npm";
 
-let cachedDb: Firestore | null = null;
+let cachedFirestore: FirestoreOperations | null = null;
 
-function buildCredentials() {
-	const projectId = process.env.FIREBASE_PROJECT_ID;
-	const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-	const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-	if (!projectId || !clientEmail || !privateKey) {
-		throw new Error(
-			"Missing Firebase Admin credentials. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY environment variables.",
-		);
+export async function getAdminFirestore() {
+	if (cachedFirestore) {
+		return cachedFirestore;
 	}
 
-	return {
-		projectId,
-		clientEmail,
-		privateKey,
-	};
-}
-
-export function getAdminFirestore(): Firestore {
-	if (cachedDb) {
-		return cachedDb;
+	const SERVICE_ACCOUNT = process.env["SERVICE_ACCOUNT"];
+	if (!SERVICE_ACCOUNT) {
+		throw new Error("SERVICE_ACCOUNT env not found");
 	}
 
-	const credentials = buildCredentials();
-	const app =
-		getApps()[0] ??
-		initializeApp({
-			credential: cert({
-				projectId: credentials.projectId,
-				clientEmail: credentials.clientEmail,
-				privateKey: credentials.privateKey,
-			}),
-		});
+	const serviceAccount = JSON.parse(SERVICE_ACCOUNT);
 
-	cachedDb = getFirestore(app);
-	return cachedDb;
+	const firebase = initFirebaseRest({
+		serviceAccount: serviceAccount,
+	});
+
+	cachedFirestore = await firebase.firestore();
+	return cachedFirestore;
 }

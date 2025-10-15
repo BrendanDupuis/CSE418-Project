@@ -1,11 +1,6 @@
 "use client";
 
-import {
-	sendEmailVerification,
-	sendPasswordResetEmail,
-	signInWithEmailAndPassword,
-	signOut,
-} from "firebase/auth";
+import { sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
@@ -43,32 +38,26 @@ export function LoginForm({ onSuccess }: Props) {
 			return;
 		}
 
-	try {
-		if (typeof window !== "undefined") {
-			window.sessionStorage.setItem("twoFactorPending", "true");
-		}
-
-		const userCredential = await signInWithEmailAndPassword(
-			firebaseAuth,
-			email,
-			password,
-		);
-
-		const user = userCredential.user;
-
-		if (!user.emailVerified) {
-			await signOut(firebaseAuth);
-			setShowResend(true);
-			setErr(
-				"Please verify your email address before signing in. Check your inbox for a verification email.",
-			);
-			setNeeds2FA(false);
-			setUserId(null);
+		try {
 			if (typeof window !== "undefined") {
-				window.sessionStorage.removeItem("twoFactorPending");
+				window.sessionStorage.setItem("twoFactorPending", "true");
 			}
-			return;
-		}
+
+			const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+
+			const user = userCredential.user;
+
+			if (!user.emailVerified) {
+				await signOut(firebaseAuth);
+				setShowResend(true);
+				setErr("Please verify your email address before signing in. Check your inbox for a verification email.");
+				setNeeds2FA(false);
+				setUserId(null);
+				if (typeof window !== "undefined") {
+					window.sessionStorage.removeItem("twoFactorPending");
+				}
+				return;
+			}
 
 			//Generate and send 2FA code via server API
 			await sendVerificationCode(user.uid, user.email || email);
@@ -87,12 +76,7 @@ export function LoginForm({ onSuccess }: Props) {
 
 			let message = "Something went wrong.";
 			let code: string | undefined;
-			if (
-				typeof e === "object" &&
-				e !== null &&
-				"message" in e &&
-				"code" in e
-			) {
+			if (typeof e === "object" && e !== null && "message" in e && "code" in e) {
 				const errObj = e as { message?: string; code?: string };
 				message = errObj.message ?? message;
 				code = errObj.code;
@@ -113,16 +97,10 @@ export function LoginForm({ onSuccess }: Props) {
 	async function handleResendVerification() {
 		try {
 			//First sign in to get the user, then send verification
-			const userCredential = await signInWithEmailAndPassword(
-				firebaseAuth,
-				email,
-				password,
-			);
+			const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
 			await sendEmailVerification(userCredential.user);
 			await signOut(firebaseAuth);
-			setOk(
-				"Verification email sent! Please check your inbox. (Check your spam)",
-			);
+			setOk("Verification email sent! Please check your inbox. (Check your spam)");
 			setShowResend(false);
 		} catch {
 			setErr("Failed to send verification email. Please try again.");
@@ -181,14 +159,7 @@ export function LoginForm({ onSuccess }: Props) {
 
 	//If 2FA is needed, show 2FA component
 	if (needs2FA && userId) {
-		return (
-			<TwoFactorVerification
-				userId={userId}
-				email={email}
-				onSuccess={handle2FASuccess}
-				onResend={handleResendCode}
-			/>
-		);
+		return <TwoFactorVerification userId={userId} email={email} onSuccess={handle2FASuccess} onResend={handleResendCode} />;
 	}
 
 	return (
@@ -203,23 +174,13 @@ export function LoginForm({ onSuccess }: Props) {
 			}}
 			noValidate
 		>
-			<p style={{ marginTop: 6, color: "gray" }}>
-				Use your email and password to sign in.
-			</p>
+			<p style={{ marginTop: 6, color: "gray" }}>Use your email and password to sign in.</p>
 
 			<div style={{ marginTop: 12 }}>
 				<label htmlFor="email" style={{ display: "block", marginBottom: 6 }}>
 					Email
 				</label>
-				<input
-					id="email"
-					type="email"
-					autoComplete="email"
-					value={email}
-					onChange={(e) => setEmail(e.target.value)}
-					style={inputStyle}
-					required
-				/>
+				<input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
 			</div>
 
 			<div style={{ marginTop: 12 }}>
@@ -237,40 +198,25 @@ export function LoginForm({ onSuccess }: Props) {
 						required
 						minLength={8}
 					/>
-					<button
-						type="button"
-						onClick={() => setShow((s) => !s)}
-						style={linkButton}
-						aria-pressed={show}
-					>
+					<button type="button" onClick={() => setShow((s) => !s)} style={linkButton} aria-pressed={show}>
 						{show ? "Hide" : "Show"}
 					</button>
 				</div>
-				<div style={{ color: "#b91c1c", minHeight: 20, marginTop: 4 }}>
-					{err}
-				</div>
+				<div style={{ color: "#b91c1c", minHeight: 20, marginTop: 4 }}>{err}</div>
 			</div>
 
 			<div style={{ display: "flex", gap: 8, marginTop: 8 }}>
 				<button type="submit" style={primaryButton}>
 					Sign in
 				</button>
-				<button
-					type="button"
-					style={linkButton}
-					onClick={() => setShowForgotPassword(!showForgotPassword)}
-				>
+				<button type="button" style={linkButton} onClick={() => setShowForgotPassword(!showForgotPassword)}>
 					Forgot password?
 				</button>
 			</div>
 
 			{showResend && (
 				<div style={{ marginTop: 8 }}>
-					<button
-						type="button"
-						onClick={handleResendVerification}
-						style={linkButton}
-					>
+					<button type="button" onClick={handleResendVerification} style={linkButton}>
 						Resend verification email
 					</button>
 				</div>
@@ -295,18 +241,10 @@ export function LoginForm({ onSuccess }: Props) {
 						Enter your email address to receive a password reset link.
 					</p>
 					<div style={{ display: "flex", gap: 8 }}>
-						<button
-							type="button"
-							onClick={handleForgotPassword}
-							style={primaryButton}
-						>
+						<button type="button" onClick={handleForgotPassword} style={primaryButton}>
 							Send reset email
 						</button>
-						<button
-							type="button"
-							onClick={() => setShowForgotPassword(false)}
-							style={linkButton}
-						>
+						<button type="button" onClick={() => setShowForgotPassword(false)} style={linkButton}>
 							Cancel
 						</button>
 					</div>

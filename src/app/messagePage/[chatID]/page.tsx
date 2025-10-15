@@ -2,20 +2,14 @@
 
 export const runtime = "edge";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
 import { chatIdToUserIds } from "@/lib/models/chat";
-import {
-	createChatDocument,
-	getChatDocument,
-	type MessageWithId,
-	sendMessage,
-	subscribeToMessages,
-} from "@/lib/models/message";
+import { createChatDocument, getChatDocument, type MessageWithId, sendMessage, subscribeToMessages } from "@/lib/models/message";
 import { getUserData, type UserWithId } from "@/lib/models/user";
+import { AuthenticatedLayout } from "../../_components/authenticated-layout";
 
 export default function MessagesPage() {
 	const params = useParams();
@@ -43,12 +37,8 @@ export default function MessagesPage() {
 				const [userId1, userId2] = chatIdToUserIds(chatID);
 
 				const [user1Data, user2Data] = await Promise.all([
-					getUserData(userId1).then((data) =>
-						data ? { id: userId1, ...data } : null,
-					),
-					getUserData(userId2).then((data) =>
-						data ? { id: userId2, ...data } : null,
-					),
+					getUserData(userId1).then((data) => (data ? { id: userId1, ...data } : null)),
+					getUserData(userId2).then((data) => (data ? { id: userId2, ...data } : null)),
 				]);
 
 				// Determine which user is current and which is friend
@@ -115,99 +105,61 @@ export default function MessagesPage() {
 
 	if (loading) {
 		return (
-			<div>
-				<header>
-					<Link href="/friendPage">Back</Link>
-					<h1>Loading...</h1>
-					<div></div>
-				</header>
+			<AuthenticatedLayout title="Loading..." showBackButton backHref="/friendPage">
 				<div>
 					<p>Loading messages...</p>
 				</div>
-			</div>
+			</AuthenticatedLayout>
 		);
 	}
 
 	if (error) {
 		return (
-			<div>
-				<header>
-					<Link href="/friendPage">Back</Link>
-					<h1>Error</h1>
-					<div></div>
-				</header>
+			<AuthenticatedLayout title="Error" showBackButton backHref="/friendPage">
 				<div>
 					<p style={{ color: "red" }}>{error}</p>
 					<button type="button" onClick={() => window.location.reload()}>
 						Retry
 					</button>
 				</div>
-			</div>
+			</AuthenticatedLayout>
 		);
 	}
 
 	if (!currentUser || !friendUser) {
 		return (
-			<div>
-				<header>
-					<Link href="/friendPage">Back</Link>
-					<h1>Chat Not Found</h1>
-					<div></div>
-				</header>
+			<AuthenticatedLayout title="Chat Not Found" showBackButton backHref="/friendPage">
 				<div>
-					<p>
-						This chat could not be found or you don't have permission to view
-						it.
-					</p>
+					<p>This chat could not be found or you don't have permission to view it.</p>
 				</div>
-			</div>
+			</AuthenticatedLayout>
 		);
 	}
 
 	return (
-		<div>
-			<header>
-				<Link href="/friendPage">Back</Link>
-				<h1>{friendUser.username}</h1>
-				<div></div>
-			</header>
-
-			<div>
-				{messages.length === 0 ? (
-					<p>No messages yet. Start the conversation!</p>
-				) : (
-					messages.map((message) => (
-						<div
-							key={message.id}
-							className={`message ${message.fromUserId === currentUser.id ? "message-me" : "message-them"}`}
-						>
-							<div>
-								<span className="sender-name">
-									{message.fromUserId === currentUser.id
-										? currentUser.username
-										: friendUser.username}
-									:
-								</span>
-								<span>{message.text}</span>
-								<span className="timestamp">
-									{message.timestamp?.toDate?.()?.toLocaleTimeString() ||
-										"Unknown time"}
-								</span>
+		<>
+			<AuthenticatedLayout title={friendUser.username} showBackButton backHref="/friendPage">
+				<div>
+					{messages.length === 0 ? (
+						<p>No messages yet. Start the conversation!</p>
+					) : (
+						messages.map((message) => (
+							<div key={message.id} className={`message ${message.fromUserId === currentUser.id ? "message-me" : "message-them"}`}>
+								<div>
+									<span className="sender-name">{message.fromUserId === currentUser.id ? currentUser.username : friendUser.username}:</span>
+									<span>{message.text}</span>
+									<span className="timestamp">{message.timestamp?.toDate?.()?.toLocaleTimeString() || "Unknown time"}</span>
+								</div>
 							</div>
-						</div>
-					))
-				)}
-			</div>
+						))
+					)}
+				</div>
 
-			<form onSubmit={handleSendMessage}>
-				<input
-					type="text"
-					value={newMessage}
-					onChange={(e) => setNewMessage(e.target.value)}
-					placeholder="Type a message..."
-				/>
-				<button type="submit">Send</button>
-			</form>
+				<form onSubmit={handleSendMessage}>
+					<input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." />
+					<button type="submit">Send</button>
+				</form>
+			</AuthenticatedLayout>
 			<style jsx>{`
               *{
               text-align: center;
@@ -249,8 +201,8 @@ export default function MessagesPage() {
                   align-items: center;
                 
                   font-size: 2rem;
-                }           
+                }                         
             `}</style>
-		</div>
+		</>
 	);
 }

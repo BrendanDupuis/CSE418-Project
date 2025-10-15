@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import { deleteAllUserChats } from "@/lib/models/chat";
 import { getUserData, type UserData } from "@/lib/models/user";
+import { AuthenticatedLayout } from "../_components/authenticated-layout";
 
 export default function HomePage() {
 	const router = useRouter();
@@ -62,45 +63,40 @@ export default function HomePage() {
 	}
 
 	return (
-		<div>
-			<h1>SecureDove Messaging App</h1>
-			<h2>Signed In As: {userData.username}</h2>
-			{userData && (
-				<div style={{ marginBottom: "1rem", color: "#666" }}>
-					<p>Email: {userData.email}</p>
-					<p>
-						Member since:{" "}
-						{userData.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"}
-					</p>
-				</div>
-			)}
-			<nav>
-				<Link href="/friendPage">Go to Friends</Link>
-			</nav>
-
-			<div>
-				<h3>Account Settings</h3>
-				<button
-					type="button"
-					onClick={() => setShowDeleteAccount(!showDeleteAccount)}
-				>
-					Delete Account
-				</button>
-
-				{showDeleteAccount && (
-					<div>
-						<p>Are you sure you want to delete your account?</p>
-						<div>
-							<button type="button" onClick={handleDeleteAccount}>
-								Yes
-							</button>
-							<button type="button" onClick={() => setShowDeleteAccount(false)}>
-								No
-							</button>
-						</div>
+		<>
+			<AuthenticatedLayout title="SecureDove Messaging App">
+				<h2>Signed In As: {userData.username}</h2>
+				{userData && (
+					<div style={{ marginBottom: "1rem", color: "#666" }}>
+						<p>Email: {userData.email}</p>
+						<p>Member since: {userData.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"}</p>
 					</div>
 				)}
-			</div>
+				<nav>
+					<Link href="/friendPage">Go to Friends</Link>
+				</nav>
+
+				<div>
+					<h3>Account Settings</h3>
+					<button type="button" onClick={() => setShowDeleteAccount(!showDeleteAccount)}>
+						Delete Account
+					</button>
+
+					{showDeleteAccount && (
+						<div>
+							<p>Are you sure you want to delete your account?</p>
+							<div>
+								<button type="button" onClick={handleDeleteAccount}>
+									Yes
+								</button>
+								<button type="button" onClick={() => setShowDeleteAccount(false)}>
+									No
+								</button>
+							</div>
+						</div>
+					)}
+				</div>
+			</AuthenticatedLayout>
 			<style jsx>{`
               *{
               text-align: center;
@@ -133,6 +129,6 @@ export default function HomePage() {
                 
                 
             `}</style>
-		</div>
+		</>
 	);
 }

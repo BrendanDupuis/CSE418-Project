@@ -41,15 +41,12 @@ export async function genUserKeys(userName: string, password: string): Promise<U
 	//Generate publickey, doesn't need to be encrypted since everyone uses eachothers public key
 	const keyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
 
-	const publicKeyJWK = await crypto.subtle.exportKey("jwk", keyPair.publicKey) as PublicKeyJWK;
+	const publicKeyJWK = (await crypto.subtle.exportKey("jwk", keyPair.publicKey)) as PublicKeyJWK;
 
-	// 3. Store public key in MongoDB
-	await storePublicKeyInDB(userName, publicKeyJWK);
-	
 	return {
 		privateKey,
 		publicKey: keyPair.publicKey,
-		publicKeyJWK
+		publicKeyJWK,
 	};
 }
 
