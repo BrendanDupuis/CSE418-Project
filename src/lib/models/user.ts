@@ -1,13 +1,5 @@
 import type { Timestamp } from "firebase/firestore";
-import {
-	collection,
-	doc,
-	getDoc,
-	getDocs,
-	onSnapshot,
-	orderBy,
-	query,
-} from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query } from "firebase/firestore";
 import { firebaseDb } from "@/lib/firebase";
 
 export interface UserData {
@@ -56,10 +48,7 @@ export async function getAllUsers(): Promise<UserWithId[]> {
 	}
 }
 
-export function subscribeToUsers(
-	onUpdate: (users: UserWithId[]) => void,
-	onError?: (error: Error) => void,
-): () => void {
+export function subscribeToUsers(onUpdate: (users: UserWithId[]) => void, onError?: (error: Error) => void): () => void {
 	const usersCollection = collection(firebaseDb, "users");
 	const usersQuery = query(usersCollection, orderBy("createdAt", "desc"));
 

@@ -6,10 +6,7 @@
 /**
  * Request the server to generate and send a verification code
  */
-export async function sendVerificationCode(
-	userId: string,
-	email: string,
-): Promise<void> {
+export async function sendVerificationCode(userId: string, email: string): Promise<void> {
 	const response = await fetch("/api/2fa/send-code", {
 		method: "POST",
 		headers: {
@@ -30,10 +27,7 @@ export async function sendVerificationCode(
 /**
  * Verify the code entered by the user
  */
-export async function verifyCode(
-	userId: string,
-	code: string,
-): Promise<boolean> {
+export async function verifyCode(userId: string, code: string): Promise<{ valid: boolean; customToken?: string }> {
 	const response = await fetch("/api/2fa/verify-code", {
 		method: "POST",
 		headers: {
@@ -46,8 +40,8 @@ export async function verifyCode(
 
 	if (!response.ok) {
 		console.error(data.error);
-		return false;
+		return { valid: false };
 	}
 
-	return data.valid;
+	return { valid: data.valid, customToken: data.customToken };
 }

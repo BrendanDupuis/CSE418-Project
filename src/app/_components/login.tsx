@@ -152,8 +152,7 @@ export function LoginForm({ onSuccess }: Props) {
 			window.sessionStorage.removeItem("twoFactorPending");
 		}
 
-		//Re-login after successful 2FA
-		await signInWithEmailAndPassword(firebaseAuth, email, password);
+		// User is now signed in with custom token containing 2FA claims
 		setNeeds2FA(false);
 		setUserId(null);
 		onSuccess?.();

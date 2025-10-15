@@ -1,7 +1,9 @@
 "use client";
 
+import { signInWithCustomToken } from "firebase/auth";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { firebaseAuth } from "@/lib/firebase";
 import { verifyCode } from "@/lib/twoFactorAuth";
 
 type Props = {
@@ -11,15 +13,15 @@ type Props = {
 	onResend?: () => void;
 };
 
-export function TwoFactorVerification({
-	userId,
-	email,
-	onSuccess,
-	onResend,
-}: Props) {
+export function TwoFactorVerification({ userId, email, onSuccess, onResend }: Props) {
 	const [code, setCode] = useState(["", "", "", "", "", ""]);
 	const [err, setErr] = useState<string | null>(null);
 	const [isVerifying, setIsVerifying] = useState(false);
+
+	useEffect(() => {
+		const firstInput = document.getElementById("code-0");
+		firstInput?.focus();
+	}, []);
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
@@ -33,14 +35,17 @@ export function TwoFactorVerification({
 
 		setIsVerifying(true);
 		try {
-			const isValid = await verifyCode(userId, fullCode);
-			if (isValid) {
+			const result = await verifyCode(userId, fullCode);
+			if (result.valid && result.customToken) {
+				// Sign in with the custom token that contains 2FA claims
+				await signInWithCustomToken(firebaseAuth, result.customToken);
 				onSuccess();
 			} else {
 				setErr("Invalid or expired verification code");
 			}
-		} catch (error: any) {
-			setErr(error.message || "Verification failed");
+		} catch (error: unknown) {
+			const errorMessage = error instanceof Error ? error.message : "Verification failed";
+			setErr(errorMessage);
 		} finally {
 			setIsVerifying(false);
 		}
@@ -97,10 +102,7 @@ export function TwoFactorVerification({
 			}}
 		>
 			<h2 style={{ marginTop: 0 }}>Two-Factor Verification</h2>
-			<p style={{ color: "gray" }}>
-				A 6-digit verification code has been sent to {email}. Please enter it
-				below.
-			</p>
+			<p style={{ color: "gray" }}>A 6-digit verification code has been sent to {email}. Please enter it below.</p>
 
 			<form onSubmit={handleSubmit}>
 				<div
@@ -113,7 +115,7 @@ export function TwoFactorVerification({
 				>
 					{code.map((digit, index) => (
 						<input
-							key={index}
+							key={`verification-code-${index}-${digit}`}
 							id={`code-${index}`}
 							type="text"
 							maxLength={1}
@@ -131,7 +133,6 @@ export function TwoFactorVerification({
 								outline: "none",
 							}}
 							disabled={isVerifying}
-							autoFocus={index === 0}
 						/>
 					))}
 				</div>
@@ -160,8 +161,7 @@ export function TwoFactorVerification({
 							background: isVerifying || code.some((c) => !c) ? "#9ca3af" : "#2563eb",
 							color: "white",
 							font: "inherit",
-							cursor:
-								isVerifying || code.some((c) => !c) ? "not-allowed" : "pointer",
+							cursor: isVerifying || code.some((c) => !c) ? "not-allowed" : "pointer",
 						}}
 					>
 						{isVerifying ? "Verifying..." : "Verify"}

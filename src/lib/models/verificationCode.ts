@@ -4,7 +4,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 
 export interface VerificationCode {
 	userId: string;
-	code: string;
+	codeHash: string;
 	expiresAt: string;
 	createdAt: string;
 }
@@ -26,15 +26,28 @@ export function generateVerificationCode(): string {
 	return code.toString();
 }
 
+/**
+ * Hash a verification code using SHA-256
+ */
+export async function hashVerificationCode(code: string): Promise<string> {
+	const encoder = new TextEncoder();
+	const data = encoder.encode(code);
+	const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+	return hashHex;
+}
+
 export async function storeVerificationCode(userId: string, code: string, expirationMinutes = 10): Promise<void> {
 	const db = await getAdminFirestore();
 	const now = new Date();
 	const expiresAt = new Date(now.getTime() + expirationMinutes * 60 * 1000);
+	const codeHash = await hashVerificationCode(code);
 
 	const docRef = db.doc(`${COLLECTION_NAME}/${userId}`);
 	const response = await docRef.set({
 		userId,
-		code,
+		codeHash,
 		expiresAt: expiresAt.toISOString(),
 		createdAt: now.toISOString(),
 	});
@@ -43,7 +56,7 @@ export async function storeVerificationCode(userId: string, code: string, expira
 		throw new Error(`Failed to store verification code: ${response.error}`);
 	}
 
-	console.log(`[Firestore VerificationStore] Stored code for user ${userId}`);
+	console.log(`[Firestore VerificationStore] Stored code hash for user ${userId}`);
 }
 
 export async function getVerificationCode(userId: string): Promise<VerificationCode | null> {
@@ -98,7 +111,8 @@ export async function verifyCode(userId: string, code: string): Promise<boolean>
 		return false;
 	}
 
-	return stored.code === code;
+	const inputCodeHash = await hashVerificationCode(code);
+	return stored.codeHash === inputCodeHash;
 }
 
 export async function cleanupExpiredCodes(): Promise<number> {

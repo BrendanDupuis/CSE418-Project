@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createTwoFactorVerifiedToken } from "@/lib/custom-session-claims";
 import { deleteVerificationCode, verifyCode } from "@/lib/models/verificationCode";
 import { checkVerifyCodeLimit, cleanupExpiredRateLimits, resetUserLimits } from "@/lib/rateLimiter";
 
@@ -50,12 +51,15 @@ export async function POST(request: Request) {
 		await resetUserLimits(userId);
 		await cleanupExpiredRateLimits();
 
+		const customToken = await createTwoFactorVerifiedToken(userId);
+
 		console.log(`[verify-code] 2FA verification successful for user: ${userId}`);
 
 		return NextResponse.json(
 			{
 				valid: true,
 				message: "Verification code is valid",
+				customToken,
 			},
 			{
 				headers: {
