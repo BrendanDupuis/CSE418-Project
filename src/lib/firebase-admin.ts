@@ -3,9 +3,12 @@ import "server-only";
 import { type FirestoreOperations, initFirebaseRest } from "@/lib/firebase-npm";
 
 let cachedFirestore: FirestoreOperations | null = null;
+let tokenExpiryTime: number | null = null;
 
 export async function getAdminFirestore() {
-	if (cachedFirestore) {
+	const now = Date.now();
+
+	if (cachedFirestore && tokenExpiryTime && now < tokenExpiryTime - 60000) {
 		return cachedFirestore;
 	}
 
@@ -21,5 +24,13 @@ export async function getAdminFirestore() {
 	});
 
 	cachedFirestore = await firebase.firestore();
+	tokenExpiryTime = now + 3600000;
+
 	return cachedFirestore;
+}
+
+export function clearFirestoreCache() {
+	cachedFirestore = null;
+	tokenExpiryTime = null;
+	console.log("[Firebase Admin] Cleared Firestore cache");
 }
