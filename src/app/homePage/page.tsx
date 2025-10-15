@@ -1,13 +1,12 @@
 "use client";
 
-import { deleteUser } from "firebase/auth";
-import { deleteDoc, doc } from "firebase/firestore";
+import { deleteUser, EmailAuthProvider, reauthenticateWithCredential, signOut } from "firebase/auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { firebaseAuth, firebaseDb } from "@/lib/firebase";
+import { firebaseAuth } from "@/lib/firebase";
 import { deleteAllUserChats } from "@/lib/models/chat";
-import { getUserData, type UserData } from "@/lib/models/user";
+import { getUserData, markUserAsDeleted, type UserData } from "@/lib/models/user";
 import { AuthenticatedLayout } from "../_components/authenticated-layout";
 
 export default function HomePage() {
@@ -20,18 +19,64 @@ export default function HomePage() {
 	const handleDeleteAccount = async () => {
 		try {
 			const user = firebaseAuth.currentUser;
-			if (!user) {
+			if (!user || !user.email) {
 				alert("No user logged in");
 				return;
 			}
 
+			// Check if 2FA login is still valid (within 2 minutes)
+			if (typeof window !== "undefined") {
+				const loginTimeStr = window.sessionStorage.getItem("twoFactorLoginTime");
+				if (loginTimeStr) {
+					const loginTime = parseInt(loginTimeStr, 10);
+					const twoMinutesAgo = Date.now() - 2 * 60 * 1000;
+					if (loginTime < twoMinutesAgo) {
+						alert("Your 2FA session has expired. Please log in again and complete 2FA before deleting your account.");
+						window.sessionStorage.removeItem("twoFactorLoginTime");
+						await signOut(firebaseAuth);
+						router.replace("/");
+						return;
+					}
+				} else {
+					alert("Unable to verify 2FA status. Please log in again.");
+					await signOut(firebaseAuth);
+					router.replace("/");
+					return;
+				}
+			}
+
+			console.log("Deleting user chats...");
 			await deleteAllUserChats(user.uid);
-			await deleteDoc(doc(firebaseDb, "users", user.uid));
+			console.log("User chats deleted successfully");
+
+			console.log("Marking user as deleted...");
+			await markUserAsDeleted(user.uid);
+			console.log("User marked as deleted successfully");
+
+			console.log("Deleting Firebase user...");
 			await deleteUser(user);
+			console.log("Firebase user deleted successfully");
+
+			// Sign out the user after successful deletion
+			console.log("Signing out user...");
+			await signOut(firebaseAuth);
+			console.log("User signed out successfully");
+
 			router.replace("/");
-		} catch (error) {
+		} catch (error: unknown) {
 			console.error("Error deleting account:", error);
-			alert("Failed to delete account. Please try again.");
+			if (error && typeof error === "object" && "code" in error) {
+				const firebaseError = error as { code: string };
+				if (firebaseError.code === "auth/wrong-password") {
+					alert("Incorrect password. Please try again.");
+				} else if (firebaseError.code === "auth/too-many-requests") {
+					alert("Too many failed attempts. Please try again later.");
+				} else {
+					alert("Failed to delete account. Please try again.");
+				}
+			} else {
+				alert("Failed to delete account. Please try again.");
+			}
 		}
 	};
 
@@ -70,6 +115,7 @@ export default function HomePage() {
 					<div style={{ marginBottom: "1rem", color: "#666" }}>
 						<p>Email: {userData.email}</p>
 						<p>Member since: {userData.createdAt?.toDate?.()?.toLocaleDateString() || "Unknown"}</p>
+						{userData.deletedAt && <p style={{ color: "#dc2626", fontWeight: "bold" }}>Account deleted on: {userData.deletedAt?.toDate?.()?.toLocaleDateString() || "Unknown"}</p>}
 					</div>
 				)}
 				<nav>

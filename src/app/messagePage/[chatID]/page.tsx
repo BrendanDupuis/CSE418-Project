@@ -168,6 +168,23 @@ export default function MessagesPage() {
 		<>
 			<AuthenticatedLayout title={friendUser.username} showBackButton backHref="/friendPage">
 				<div>
+					{friendUser.deletedAt && (
+						<div
+							style={{
+								backgroundColor: "#fee2e2",
+								border: "1px solid #fecaca",
+								borderRadius: "4px",
+								padding: "12px",
+								marginBottom: "16px",
+								color: "#991b1b",
+							}}
+						>
+							<p>
+								<strong>Account deleted</strong>
+							</p>
+							<p>This user deleted their account on {friendUser.deletedAt?.toDate?.()?.toLocaleDateString() || "unknown date"}. Some older messages may be undecryptable.</p>
+						</div>
+					)}
 					{!bothUsersHaveKeys && (
 						<div
 							style={{

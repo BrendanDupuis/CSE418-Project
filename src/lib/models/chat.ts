@@ -1,12 +1,6 @@
-import {
-	collection,
-	deleteDoc,
-	doc,
-	getDocs,
-	query,
-	where,
-} from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from "firebase/firestore";
 import { firebaseDb } from "@/lib/firebase";
+import { getUserChatIds } from "./user";
 
 const userid1_userid2_chatSeparator = "____";
 
@@ -19,37 +13,67 @@ export function chatIdToUserIds(chatId: string) {
 	return chatId.split(userid1_userid2_chatSeparator) as [string, string];
 }
 
+export async function addUserToChat(userId: string, chatId: string): Promise<void> {
+	try {
+		const userChatRef = doc(firebaseDb, "users", userId, "chats", chatId);
+		await setDoc(userChatRef, {
+			chatId,
+			addedAt: new Date(),
+		});
+	} catch (error) {
+		console.error("Error adding user to chat:", error);
+		throw error;
+	}
+}
+
+export async function removeUserFromChat(userId: string, chatId: string): Promise<void> {
+	try {
+		const userChatRef = doc(firebaseDb, "users", userId, "chats", chatId);
+		await deleteDoc(userChatRef);
+	} catch (error) {
+		console.error("Error removing user from chat:", error);
+		throw error;
+	}
+}
+
 export async function deleteAllUserChats(userId: string): Promise<void> {
-	const chatsQuery = query(
-		collection(firebaseDb, "chat"),
-		where("user1", "==", userId),
-	);
-	const chatsQuery2 = query(
-		collection(firebaseDb, "chat"),
-		where("user2", "==", userId),
-	);
+	try {
+		console.log("Getting user's chat IDs...");
+		const userChatIds = await getUserChatIds(userId);
+		console.log(`Found ${userChatIds.length} chats for user ${userId}`);
 
-	const [chatsSnapshot1, chatsSnapshot2] = await Promise.all([
-		getDocs(chatsQuery),
-		getDocs(chatsQuery2),
-	]);
+		for (const chatId of userChatIds) {
+			console.log(`Processing chat ${chatId}...`);
 
-	const chatIds = new Set<string>();
-	chatsSnapshot1.forEach((doc) => chatIds.add(doc.id));
-	chatsSnapshot2.forEach((doc) => chatIds.add(doc.id));
+			console.log(`Querying messages in chat ${chatId}...`);
+			const messagesQuery = query(collection(firebaseDb, "chat", chatId, "messages"), where("fromUserId", "==", userId));
+			const messagesSnapshot = await getDocs(messagesQuery);
+			console.log(`Found ${messagesSnapshot.docs.length} messages to delete in chat ${chatId}`);
 
-	for (const chatId of chatIds) {
-		const messagesQuery = query(
-			collection(firebaseDb, "chat", chatId, "messages"),
-			where("fromUserId", "==", userId),
-		);
-		const messagesSnapshot = await getDocs(messagesQuery);
+			console.log(`Deleting messages in chat ${chatId}...`);
+			const deletePromises = messagesSnapshot.docs.map((messageDoc) => deleteDoc(doc(firebaseDb, "chat", chatId, "messages", messageDoc.id)));
+			await Promise.all(deletePromises);
+			console.log(`Messages deleted successfully in chat ${chatId}`);
 
-		const deletePromises = messagesSnapshot.docs.map((messageDoc) =>
-			deleteDoc(doc(firebaseDb, "chat", chatId, "messages", messageDoc.id)),
-		);
-		await Promise.all(deletePromises);
+			// Delete user's public and private keys from this chat
+			console.log(`Deleting keys in chat ${chatId}...`);
+			const publicKeyRef = doc(firebaseDb, "chat", chatId, "publicKeys", userId);
+			const privateKeyRef = doc(firebaseDb, "chat", chatId, "privateKeys", userId);
 
-		await deleteDoc(doc(firebaseDb, "chat", chatId));
+			await Promise.all([
+				deleteDoc(publicKeyRef).catch(() => {}), // Ignore if doesn't exist
+				deleteDoc(privateKeyRef).catch(() => {}), // Ignore if doesn't exist
+			]);
+			console.log(`Keys deleted successfully in chat ${chatId}`);
+
+			// Remove user from their chat tracking collection
+			console.log(`Removing user from chat tracking...`);
+			await removeUserFromChat(userId, chatId);
+			console.log(`User removed from chat tracking for ${chatId}`);
+		}
+		console.log("All user chats processed successfully");
+	} catch (error) {
+		console.error("Error in deleteAllUserChats:", error);
+		throw error;
 	}
 }

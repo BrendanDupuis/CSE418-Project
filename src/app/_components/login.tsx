@@ -150,6 +150,8 @@ export function LoginForm({ onSuccess }: Props) {
 	async function handle2FASuccess() {
 		if (typeof window !== "undefined") {
 			window.sessionStorage.removeItem("twoFactorPending");
+			// Store the login time for 2FA expiration check
+			window.sessionStorage.setItem("twoFactorLoginTime", Date.now().toString());
 		}
 
 		// User is now signed in with custom token containing 2FA claims

@@ -3,6 +3,7 @@ import { addDoc, collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, q
 import { decryptMessageFromText, encryptMessage } from "@/app/_components/endToEndEncryption";
 import { generateChatKeys, storeChatKeys } from "@/app/_components/keyGen";
 import { firebaseDb } from "@/lib/firebase";
+import { addUserToChat } from "@/lib/models/chat";
 import { getChatUsersWithKeys, hasChatKeys } from "@/lib/models/chatKey";
 
 export interface Message {
@@ -73,6 +74,7 @@ export async function ensureUserHasChatKeys(chatId: string, userId: string, pass
 	try {
 		const userHasKeys = await hasChatKeys(chatId, userId);
 		if (!userHasKeys) {
+			await addUserToChat(userId, chatId);
 			const chatKeys = await generateChatKeys(chatId, passwordHash);
 			await storeChatKeys(chatId, userId, chatKeys);
 		}
@@ -166,6 +168,8 @@ export async function createChatDocument(chatId: string, thisUser: string, user2
 		};
 		await setDoc(chatDocRef, chatData);
 
+		await addUserToChat(thisUser, chatId);
+
 		const chatKeys = await generateChatKeys(chatId, passwordHash);
 		await storeChatKeys(chatId, thisUser, chatKeys);
 	} catch (error) {
@@ -193,20 +197,25 @@ export function subscribeToMessages(
 				const messageData = doc.data() as Message;
 				let decryptedText: string;
 
-				if (messageData.fromUserId === currentUserId) {
-					// User is viewing their own sent message - use sender encrypted text
-					// Decrypt using currentUserId's private key + receiver's public key
-					const chatDoc = await getChatDocument(chatId);
-					if (!chatDoc) {
-						decryptedText = "[Message decryption failed - chat not found]";
+				try {
+					if (messageData.fromUserId === currentUserId) {
+						// User is viewing their own sent message - use sender encrypted text
+						// Decrypt using currentUserId's private key + receiver's public key
+						const chatDoc = await getChatDocument(chatId);
+						if (!chatDoc) {
+							decryptedText = "[Message decryption failed - chat not found]";
+						} else {
+							// const receiverUserId = chatDoc.user1 === currentUserId ? chatDoc.user2 : chatDoc.user1;
+							decryptedText = await decryptMessageFromText(chatId, currentUserId, currentUserId, messageData.senderEncryptedText, passwordHash);
+						}
 					} else {
-						// const receiverUserId = chatDoc.user1 === currentUserId ? chatDoc.user2 : chatDoc.user1;
-						decryptedText = await decryptMessageFromText(chatId, currentUserId, currentUserId, messageData.senderEncryptedText, passwordHash);
+						// User is viewing a message sent to them - use receiver encrypted text
+						// Decrypt using currentUserId's private key + sender's public key
+						decryptedText = await decryptMessageFromText(chatId, messageData.fromUserId, currentUserId, messageData.receiverEncryptedText, passwordHash);
 					}
-				} else {
-					// User is viewing a message sent to them - use receiver encrypted text
-					// Decrypt using currentUserId's private key + sender's public key
-					decryptedText = await decryptMessageFromText(chatId, messageData.fromUserId, currentUserId, messageData.receiverEncryptedText, passwordHash);
+				} catch (error) {
+					console.error("Error decrypting message:", error);
+					decryptedText = "[Encrypted message - keys not ready]";
 				}
 
 				decryptedMessages.push({

@@ -19,6 +19,7 @@ export function LogoutButton({ className, style }: LogoutButtonProps) {
 			clearPasswordHash();
 			if (typeof window !== "undefined") {
 				window.sessionStorage.removeItem("twoFactorPending");
+				window.sessionStorage.removeItem("twoFactorLoginTime");
 			}
 			router.replace("/");
 		} catch (error) {

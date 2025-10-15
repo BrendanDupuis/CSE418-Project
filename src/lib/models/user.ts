@@ -1,11 +1,12 @@
 import type { Timestamp } from "firebase/firestore";
-import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
 import { firebaseDb } from "@/lib/firebase";
 
 export interface UserData {
 	username: string;
 	email: string;
 	createdAt: Timestamp;
+	deletedAt?: Timestamp;
 }
 
 export interface UserWithId extends UserData {
@@ -24,6 +25,35 @@ export async function getUserData(userId: string): Promise<UserData | null> {
 	} catch (error) {
 		console.error("Error fetching user data:", error);
 		return null;
+	}
+}
+
+export async function markUserAsDeleted(userId: string): Promise<void> {
+	try {
+		const userRef = doc(firebaseDb, "users", userId);
+		await updateDoc(userRef, {
+			deletedAt: serverTimestamp(),
+		});
+	} catch (error) {
+		console.error("Error marking user as deleted:", error);
+		throw error;
+	}
+}
+
+export async function getUserChatIds(userId: string): Promise<string[]> {
+	try {
+		const userChatsRef = collection(firebaseDb, "users", userId, "chats");
+		const userChatsSnapshot = await getDocs(userChatsRef);
+
+		const chatIds: string[] = [];
+		userChatsSnapshot.docs.forEach((doc) => {
+			chatIds.push(doc.id);
+		});
+
+		return chatIds;
+	} catch (error) {
+		console.error("Error getting user chat IDs:", error);
+		return [];
 	}
 }
 

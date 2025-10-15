@@ -41,7 +41,7 @@ export async function decryptMessage(
 	const sendersPublicKey = await getChatPublicKey(chatId, senderUserId);
 
 	if (!myPrivateKey || !sendersPublicKey) {
-		throw new Error("Keys not found");
+		throw new Error("Keys not found - user may have been deleted");
 	}
 
 	const sharedKey = await makeSharedKey(myPrivateKey, sendersPublicKey);
@@ -58,6 +58,9 @@ export async function decryptMessageFromText(chatId: string, senderUserId: strin
 		return await decryptMessage(chatId, senderUserId, receiverUserId, encryptedData, passwordHash);
 	} catch (error) {
 		console.error("Failed to decrypt message:", error);
+		if (error instanceof Error && error.message.includes("user may have been deleted")) {
+			return "[Message from deleted user - cannot decrypt]";
+		}
 		return "[Encrypted message - decryption failed]";
 	}
 }

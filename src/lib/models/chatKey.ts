@@ -117,13 +117,19 @@ export async function deleteChatKeys(chatId: string, userId: string): Promise<bo
 }
 
 export async function hasChatKeys(chatId: string, userId: string): Promise<boolean> {
-	const publicKeyRef = doc(firebaseDb, "chat", chatId, "publicKeys", userId);
-	const privateKeyRef = doc(firebaseDb, "chat", chatId, "privateKeys", userId);
+	try {
+		const publicKeyRef = doc(firebaseDb, "chat", chatId, "publicKeys", userId);
+		const privateKeyRef = doc(firebaseDb, "chat", chatId, "privateKeys", userId);
 
-	const publicKeySnap = await getDoc(publicKeyRef);
-	const privateKeySnap = await getDoc(privateKeyRef);
+		const publicKeySnap = await getDoc(publicKeyRef);
+		const privateKeySnap = await getDoc(privateKeyRef);
 
-	return publicKeySnap.exists() && privateKeySnap.exists();
+		return publicKeySnap.exists() && privateKeySnap.exists();
+	} catch (error) {
+		// If we can't read the keys due to permissions, assume they don't exist
+		console.log("Cannot check if user has keys due to permissions, assuming they don't exist");
+		return false;
+	}
 }
 
 export async function getChatUsersWithKeys(chatId: string): Promise<string[]> {

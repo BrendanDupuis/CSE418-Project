@@ -73,10 +73,24 @@ export default function FriendsPage() {
 					) : (
 						users.map((user) => (
 							<Link href={`/messagePage/${generateChatId(currentUserId, user.id)}`} key={user.id}>
-								<div>
+								<div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
 									<h3>
 										{user.username} ({user.email})
 									</h3>
+									{user.deletedAt && (
+										<div
+											style={{
+												backgroundColor: "#fee2e2",
+												border: "1px solid #fecaca",
+												borderRadius: "4px",
+												padding: "4px 8px",
+												color: "#991b1b",
+												fontSize: "1rem",
+											}}
+										>
+											<span>Deleted {user.deletedAt?.toDate?.()?.toLocaleDateString() || "unknown date"}</span>
+										</div>
+									)}
 								</div>
 							</Link>
 						))
