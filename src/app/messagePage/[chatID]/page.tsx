@@ -118,6 +118,8 @@ export default function MessagesPage() {
 		const msg = e.target.value;
 		if (msg.length <= MessageLength) {
 			setNewMessage(msg);
+		}
+		else{
 			setError("Max message length reached.");
 		}
 	};
