@@ -12,6 +12,7 @@ import { getUserData, type UserWithId } from "@/lib/models/user";
 import { getPasswordHash } from "@/lib/password-hash";
 import { AuthenticatedLayout } from "../../_components/authenticated-layout";
 
+const MessageLength = 1000;
 export default function MessagesPage() {
 	const params = useParams();
 	const chatID = params.chatID as string;
@@ -113,6 +114,13 @@ export default function MessagesPage() {
 		}
 	}, [chatID]);
 
+	const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const msg = e.target.value;
+		if (msg.length <= MessageLength) {
+			setNewMessage(msg);
+			setError("Max message length reached.");
+		}
+	};
 	const handleSendMessage = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (newMessage.trim() && currentUser && friendUser) {
@@ -220,7 +228,7 @@ export default function MessagesPage() {
 
 				{bothUsersHaveKeys && (
 					<form onSubmit={handleSendMessage}>
-						<input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." />
+						<input type="text" value={newMessage} onChange={handleTyping/*(e) => setNewMessage(e.target.value)*/} placeholder="Type a message..." />
 						<button type="submit">Send</button>
 					</form>
 				)}
