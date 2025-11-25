@@ -8,7 +8,6 @@ import { firebaseAuth, firebaseDb } from "@/lib/firebase";
 import type { UserData } from "@/lib/models/user";
 import { storePasswordHash } from "@/lib/password-hash";
 import { validatePassword } from "@/lib/password-validation";
-import { collection, query, where, getDocs } from "firebase/firestore";
 
 export function SingUpFrom() {
 	const [username, setUsername] = useState("");
@@ -46,14 +45,15 @@ export function SingUpFrom() {
 			setErr(passwordError);
 			return;
 		}
-		const usernameQuery = query(collection(firebaseDb, "users"), where("username", "==", username));
-		const querySnapshot = await getDocs(usernameQuery);
-		if (!querySnapshot.empty) {
-				setErr("This username is already taken. Please choose another one.");
-				return;
-		}
+		
 
 		try {
+			try {
+				await setDoc(doc(firebaseDb, "usernames", username), { temp: true });
+			} catch (e) {
+				setErr("This username is already taken.");
+				return;
+			}
 			setUsername("");
 			setEmail("");
 			setPassword("");
