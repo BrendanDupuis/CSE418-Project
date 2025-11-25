@@ -75,7 +75,7 @@ export default function FriendsPage() {
 							<Link href={`/messagePage/${generateChatId(currentUserId, user.id)}`} key={user.id}>
 								<div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
 									<h3>
-										{user.username} ({user.email})
+										{user.username} 
 									</h3>
 									{user.deletedAt && (
 										<div
