@@ -47,39 +47,42 @@ export function SingUpFrom() {
 		}
 
 		try {
-			const usernameRef = doc(firebaseDb, "usernames", username);
-			const usernameSnap = await getDoc(usernameRef);
+	const usernameRef = doc(firebaseDb, "usernames", username);
+      const usernameSnap = await getDoc(usernameRef);
 
-			if (usernameSnap.exists()) {
-				setErr("Username taken, choose another one.");
-				return;
-			}
+      if (usernameSnap.exists()) {
+        setErr("Username taken, choose another one.");
+        return;
+      }
 
-			const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-			const { uid } = userCredentials.user;
+      // Create user account
+      const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      const { uid } = userCredentials.user;
 
-			await storePasswordHash(password);
+      await storePasswordHash(password);
 
-			await setDoc(doc(firebaseDb, "usernames", username), {
-				uid,
-				createdAt: serverTimestamp(),
-			});
+      // Create username document
+      await setDoc(doc(firebaseDb, "usernames", username), {
+        uid,
+        createdAt: serverTimestamp(),
+      });
 
-			const userData: UserData = {
-				username,
-				email,
-				createdAt: serverTimestamp() as Timestamp,
-			};
+      // Create user document
+      const userData: UserData = {
+        username,
+        email,
+        createdAt: serverTimestamp() as Timestamp,
+      };
+      await setDoc(doc(firebaseDb, "users", uid), userData);
 
-			await setDoc(doc(firebaseDb, "users", uid), userData);
+      // Send email verification
+      await sendEmailVerification(userCredentials.user);
 
-			await sendEmailVerification(userCredentials.user);
-
-			setUsername("");
-			setEmail("");
-			setPassword("");
-			setPassword2("");
-
+      // Clear form after everything succeeds
+      setUsername("");
+      setEmail("");
+      setPassword("");
+      setPassword2("");
 			setOk("Sign up complete! Please check your email to verify your account.");
 		} catch (e: unknown) {
 			let message = "Something went wrong.";
