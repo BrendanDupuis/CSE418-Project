@@ -1,7 +1,7 @@
 "use client";
+
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import { serverTimestamp, type Timestamp } from "firebase/firestore";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
@@ -47,54 +47,46 @@ export function SingUpFrom() {
 		}
 
 		try {
-	const usernameRef = doc(firebaseDb, "usernames", username);
-      const usernameSnap = await getDoc(usernameRef);
+			setUsername("");
+			setEmail("");
+			setPassword("");
+			setPassword2("");
 
-      if (usernameSnap.exists()) {
-        setErr("Username taken, choose another one.");
-        return;
-      }
+			const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
 
-      // Create user account
-      const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-      const { uid } = userCredentials.user;
+			const { uid } = userCredentials.user;
+			const usernameRef = doc(firebaseDb, "usernames", username);
 
-      await storePasswordHash(password);
+			try {
+				await setDoc(usernameRef, { uid });
+			} catch (e) {
+				await userCredentials.user.delete(); // rollback
+				setErr("This username is already taken. Please choose a different one.");
+				return;
+			}
 
-      // Create username document
-      await setDoc(doc(firebaseDb, "usernames", username), {
-        uid,
-        createdAt: serverTimestamp(),
-      });
+			await storePasswordHash(password);
 
-      // Create user document
-      const userData: UserData = {
-        username,
-        email,
-        createdAt: serverTimestamp() as Timestamp,
-      };
-      await setDoc(doc(firebaseDb, "users", uid), userData);
+			const userData: UserData = {
+				username,
+				email,
+				createdAt: serverTimestamp() as Timestamp,
+			};
+			await setDoc(doc(firebaseDb, "users", uid), userData);
 
-      // Send email verification
-      await sendEmailVerification(userCredentials.user);
+			await sendEmailVerification(userCredentials.user);
 
-      // Clear form after everything succeeds
-      setUsername("");
-      setEmail("");
-      setPassword("");
-      setPassword2("");
 			setOk("Sign up complete! Please check your email to verify your account.");
 		} catch (e: unknown) {
 			let message = "Something went wrong.";
 			let code: string | undefined;
-
 			if (typeof e === "object" && e !== null && "message" in e && "code" in e) {
 				const errObj = e as { message?: string; code?: string };
 				message = errObj.message ?? message;
 				code = errObj.code;
 			}
-
 			switch (code) {
+			
 				case "auth/invalid-credential":
 					message = "Invalid email or password";
 					break;
@@ -104,10 +96,11 @@ export function SingUpFrom() {
 				case "auth/email-already-in-use":
 					message = "An account with this email already exists. Please sign in instead.";
 					break;
-				case "auth/password-does-not-meet-requirements":
+				case "auth/password-does-not-meet-requirements": {
 					message =
 						"Missing password requirements: [Password must contain at least 8 characters, Password must contain an upper case character, Password must contain a numeric character, Password must contain a non-alphanumeric character]";
 					break;
+				}
 			}
 
 			setErr(message);
