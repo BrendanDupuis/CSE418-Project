@@ -7,10 +7,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isTwoFactorVerified() {
-      return isSignedIn() && request.auth.token.twoFactorVerified == true;
-    }
-
     function isOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
@@ -53,14 +49,9 @@ service cloud.firestore {
           request.auth.uid == chatDoc(chatId).data.user2
         );
     }
-    match /usernames/{name} {
-    allow create: if isSignedIn()
-      && request.resource.data.keys().hasOnly(['uid'])
-      && request.resource.data.uid == request.auth.uid;
-    allow update, delete: if false;
-    }
+
     match /users/{uid} {
-      allow read: if isSignedIn() && isTwoFactorVerified();
+      allow read: if isSignedIn();
 
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['username', 'email', 'createdAt'])
@@ -69,31 +60,16 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.createdAt is timestamp;
 
-      allow update: if isOwner(uid) && isTwoFactorVerified()
-        && request.resource.data.keys().hasOnly(['username', 'email', 'createdAt', 'deletedAt'])
-        && request.resource.data.username is string
-        && request.resource.data.email is string
-        && request.resource.data.createdAt is timestamp
-        && (request.resource.data.deletedAt == null || request.resource.data.deletedAt is timestamp);
-      allow delete: if false;
-
-      match /chats/{chatId} {
-        allow read: if isOwner(uid) && isTwoFactorVerified();
-        allow create: if isOwner(uid) && isTwoFactorVerified();
-        allow update: if false;
-        allow delete: if isOwner(uid) && isTwoFactorVerified();
-      }
+      allow update: if false;
+      allow delete: if isOwner(uid);
     }
 
     match /chat/{chatId} {
       // Only participants can read the chat document
-      allow read: if isChatParticipant(chatId) && isTwoFactorVerified();
-      
-      // Allow querying chat documents for account deletion
-      allow list: if false;
+      allow read: if isChatParticipant(chatId);
 
       // Only participants can create with canonical chatId and valid users
-      allow create: if isSignedIn() && isTwoFactorVerified()
+      allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly(['user1', 'user2', 'createdAt'])
         && request.resource.data.user1 is string
         && request.resource.data.user2 is string
@@ -112,9 +88,9 @@ service cloud.firestore {
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read: if isChatParticipant(chatId) && isTwoFactorVerified();
+        allow read: if isChatParticipant(chatId);
 
-        allow create: if isChatParticipant(chatId) && isTwoFactorVerified()
+        allow create: if isChatParticipant(chatId)
           && request.resource.data.keys().hasOnly(['senderEncryptedText', 'receiverEncryptedText', 'fromUserId', 'timestamp'])
           && request.resource.data.senderEncryptedText is string
           && request.resource.data.senderEncryptedText.size() > 0
@@ -126,14 +102,14 @@ service cloud.firestore {
 
         allow update: if false;
 
-        allow delete: if isChatParticipant(chatId) && isTwoFactorVerified()
+        allow delete: if isChatParticipant(chatId)
           && request.auth.uid == resource.data.fromUserId;
       }
 
       match /publicKeys/{userId} {
-        allow read: if isChatParticipant(chatId) && isTwoFactorVerified();
+        allow read: if isChatParticipant(chatId);
 
-        allow create: if isChatParticipant(chatId) && isTwoFactorVerified()
+        allow create: if isChatParticipant(chatId)
           && request.resource.data.keys().hasOnly(['userId', 'publicKey', 'createdAt', 'updatedAt'])
           && request.resource.data.userId is string
           && request.resource.data.userId == userId
@@ -142,7 +118,7 @@ service cloud.firestore {
           && request.resource.data.updatedAt is timestamp
           && request.auth.uid == userId;
 
-        allow update: if isChatParticipant(chatId) && isTwoFactorVerified()
+        allow update: if isChatParticipant(chatId)
           && request.resource.data.keys().hasOnly(['publicKey', 'updatedAt'])
           && request.resource.data.publicKey is map
           && request.resource.data.updatedAt is timestamp
@@ -153,10 +129,10 @@ service cloud.firestore {
       }
 
       match /privateKeys/{userId} {
-        allow read: if isChatParticipant(chatId) && isTwoFactorVerified()
+        allow read: if isChatParticipant(chatId)
           && request.auth.uid == userId;
 
-        allow create: if isChatParticipant(chatId) && isTwoFactorVerified()
+        allow create: if isChatParticipant(chatId)
           && request.resource.data.keys().hasOnly(['userId', 'encryptedPrivateKey', 'createdAt', 'updatedAt'])
           && request.resource.data.userId is string
           && request.resource.data.userId == userId
@@ -165,19 +141,15 @@ service cloud.firestore {
           && request.resource.data.updatedAt is timestamp
           && request.auth.uid == userId;
 
-        allow update: if isChatParticipant(chatId) && isTwoFactorVerified()
+        allow update: if isChatParticipant(chatId)
           && request.resource.data.keys().hasOnly(['encryptedPrivateKey', 'updatedAt'])
           && request.resource.data.encryptedPrivateKey is string
           && request.resource.data.updatedAt is timestamp
           && request.auth.uid == userId;
 
-        allow delete: if isChatParticipant(chatId) && isTwoFactorVerified()
+        allow delete: if isChatParticipant(chatId)
           && request.auth.uid == userId;
       }
-    }
-
-    match /verificationCodes/{userId} {
-      allow read, write: if false;
     }
 
     match /{document=**} {
