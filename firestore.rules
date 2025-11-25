@@ -53,7 +53,14 @@ service cloud.firestore {
           request.auth.uid == chatDoc(chatId).data.user2
         );
     }
-
+    match /usernames/{username} {
+      allow read: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid is string
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
     match /users/{uid} {
       allow read: if isSignedIn() && isTwoFactorVerified();
 
