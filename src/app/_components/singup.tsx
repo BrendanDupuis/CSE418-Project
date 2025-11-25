@@ -60,9 +60,9 @@ export function SingUpFrom() {
 			try {
 				await setDoc(usernameRef, { uid });
 			} catch (e) {
-				await userCredentials.user.delete(); // rollback
-				setErr("This username is already taken. Please choose a different one.");
-				return;
+				// Username already taken
+				await userCredentials.user.delete(); // rollback auth user
+				throw { code: "auth/username-already-used" };
 			}
 
 			await storePasswordHash(password);
@@ -86,7 +86,9 @@ export function SingUpFrom() {
 				code = errObj.code;
 			}
 			switch (code) {
-			
+				case "auth/username-already-used":
+					message = "This username is already taken. Please choose a different one.";
+					break;
 				case "auth/invalid-credential":
 					message = "Invalid email or password";
 					break;
