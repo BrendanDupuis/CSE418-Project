@@ -55,8 +55,7 @@ export function SingUpFrom() {
 			const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
 
 			const { uid } = userCredentials.user;
-			const cleanUsername = username.toLowerCase(); // optional but recommended
-			const usernameRef = doc(firebaseDb, "usernames", cleanUsername);
+			const usernameRef = doc(firebaseDb, "usernames", username);
 
 			try {
 				await setDoc(usernameRef, { uid });
