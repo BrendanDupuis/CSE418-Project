@@ -118,3 +118,49 @@ export async function getChatPrivateKey(chatId: string, userId: string, password
 		return null;
 	}
 }
+
+export async function reencryptAllChatKeys(userId: string, oldPassword: string, newPassword: string): Promise<{ success: number; failed: number; errors: string[] }> {
+	const { getUserChatIds } = await import("@/lib/models/user");
+	const chatIds = await getUserChatIds(userId);
+
+	let successCount = 0;
+	let failedCount = 0;
+	const errors: string[] = [];
+
+	for (const chatId of chatIds) {
+		try {
+			// Get encrypted private key from DB
+			const encryptedPrivateKeyString = await getChatPrivateKeyFromDB(chatId, userId);
+			if (!encryptedPrivateKeyString) {
+				continue; // No key for this chat, skip
+			}
+
+			// Decrypt with old password
+			const binaryString = atob(encryptedPrivateKeyString);
+			const bytes = new Uint8Array(binaryString.length);
+			for (let i = 0; i < binaryString.length; i++) {
+				bytes[i] = binaryString.charCodeAt(i);
+			}
+			const encryptedPrivateKeyBuffer = bytes.buffer;
+
+			const privateKeyJWK = await decryptPrivateKeyWithAES(encryptedPrivateKeyBuffer, oldPassword, chatId);
+			const privateKey = await crypto.subtle.importKey("jwk", privateKeyJWK, { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+
+			// Re-encrypt with new password
+			const encryptedPrivateKey = await encryptPrivateKeyWithAES(privateKey, newPassword, chatId);
+
+			// Store updated encrypted private key
+			const base64EncryptedPrivateKey = btoa(String.fromCharCode(...new Uint8Array(encryptedPrivateKey)));
+			await storeChatPrivateKey(chatId, userId, base64EncryptedPrivateKey);
+
+			successCount++;
+		} catch (error) {
+			failedCount++;
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			errors.push(`Chat ${chatId}: ${errorMessage}`);
+			console.error(`Failed to re-encrypt keys for chat ${chatId}:`, error);
+		}
+	}
+
+	return { success: successCount, failed: failedCount, errors };
+}
