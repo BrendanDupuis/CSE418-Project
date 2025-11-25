@@ -54,12 +54,9 @@ service cloud.firestore {
         );
     }
     match /usernames/{name} {
-    allow create: if isSignedIn()
-      && request.resource.data.keys().hasOnly(['uid'])
-      && request.resource.data.uid == request.auth.uid;
-
-    // No updates or deletes — username is permanent
-    allow update, delete: if false;
+      allow read: if true;
+      allow create: if !exists(/databases/$(database)/documents/usernames/$(name));
+      allow update, delete: if false;
     }
     match /users/{uid} {
       allow read: if isSignedIn() && isTwoFactorVerified();
