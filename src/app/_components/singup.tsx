@@ -48,16 +48,8 @@ export function SingUpFrom() {
 		
 
 		try {
-			try {
-				await setDoc(doc(firebaseDb, "usernames", username), { temp: true });
-			} catch (e) {
-				setErr("This username is already taken.");
-				return;
-			}
-			setUsername("");
-			setEmail("");
-			setPassword("");
-			setPassword2("");
+			await setDoc(doc(firebaseDb, "usernames", username), { uid: "temp" });
+      		// If the username already exists, this will throw and we catch below
 
 			const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
 
@@ -71,9 +63,12 @@ export function SingUpFrom() {
 				createdAt: serverTimestamp() as Timestamp,
 			};
 			await setDoc(doc(firebaseDb, "users", uid), userData);
-
+			await setDoc(doc(firebaseDb, "usernames", username), { uid });
 			await sendEmailVerification(userCredentials.user);
-
+			setUsername("");
+			setEmail("");
+			setPassword("");
+			setPassword2("");
 			setOk("Sign up complete! Please check your email to verify your account.");
 		} catch (e: unknown) {
 			let message = "Something went wrong.";
