@@ -1,7 +1,7 @@
 "use client";
 
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import { doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
+import { getDoc, doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
@@ -48,13 +48,15 @@ export function SingUpFrom() {
 		
 
 		try {
-			await setDoc(doc(firebaseDb, "usernames", username), { uid: "temp" });
       		// If the username already exists, this will throw and we catch below
-
+			const usernameDoc = await getDoc(doc(firebaseDb, "usernames", username));
+			if (usernameDoc.exists()) {
+				setErr("Username is already taken.");
+				return;
+			}
 			const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
 
 			const { uid } = userCredentials.user;
-
 			await storePasswordHash(password);
 
 			const userData: UserData = {
@@ -63,7 +65,7 @@ export function SingUpFrom() {
 				createdAt: serverTimestamp() as Timestamp,
 			};
 			await setDoc(doc(firebaseDb, "users", uid), userData);
-			await setDoc(doc(firebaseDb, "usernames", username), { uid });
+			await setDoc(doc(firebaseDb, "usernames", username), {uid});
 			await sendEmailVerification(userCredentials.user);
 			setUsername("");
 			setEmail("");
