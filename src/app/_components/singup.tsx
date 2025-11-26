@@ -1,7 +1,7 @@
 "use client";
 
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import { runTransaction, doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
+import { doc, getDocs, query, collection, where, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
@@ -45,21 +45,19 @@ export function SingUpFrom() {
 		setErr(passwordError);
 		return;
 	}
-
+	const q = query(collection(firebaseDb, "users"), where("username", "==", username));
+		const existing = await getDocs(q);
+		if (!existing.empty) {
+			setErr("Username is already taken.");
+			return;
+		}
 	try {
+		
 		const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
 		const { uid } = userCredentials.user;
 
 		await storePasswordHash(password);
 
-		await runTransaction(firebaseDb, async (tx) => {
-			const ref = doc(firebaseDb, "usernames", username);
-			const snap = await tx.get(ref);
-			if (snap.exists()) {
-				throw new Error("Username is already taken.");
-			}
-			tx.set(ref, { uid });
-		});
 
 		const userData: UserData = {
 			username,
@@ -68,10 +66,8 @@ export function SingUpFrom() {
 		};
 		await setDoc(doc(firebaseDb, "users", uid), userData);
 
-		// Send email verification
 		await sendEmailVerification(userCredentials.user);
 
-		// Reset form
 		setUsername("");
 		setEmail("");
 		setPassword("");
@@ -80,7 +76,7 @@ export function SingUpFrom() {
 		} catch (e: unknown) {
 			if (e instanceof Error && e.message === "Username is already taken.") {
 				setErr("Username is taken, choose another.");
-				
+
 			}
 			else{
 			let message = "Something went wrong.";
