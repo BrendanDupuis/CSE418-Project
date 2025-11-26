@@ -1,7 +1,7 @@
 "use client";
 
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import { getDoc, doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
+import { runTransaction, doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
@@ -20,59 +20,69 @@ export function SingUpFrom() {
 	const [ok, setOk] = useState<string | null>(null);
 
 	async function handleSubmit(e: React.FormEvent) {
-		e.preventDefault();
-		setErr(null);
-		setOk(null);
+	e.preventDefault();
+	setErr(null);
+	setOk(null);
 
-		if (!username || !email || !password || !password2) {
-			setErr("Email, Password, and  Confirm Password are required.");
-			return;
-		}
+	if (!username || !email || !password || !password2) {
+		setErr("Email, Password, and Confirm Password are required.");
+		return;
+	}
 
-		const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-		if (!emailPattern.test(email)) {
-			setErr("Please enter a valid email address");
-			return;
-		}
+	const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	if (!emailPattern.test(email)) {
+		setErr("Please enter a valid email address");
+		return;
+	}
 
-		if (password !== password2) {
-			setErr("Passwords do not match");
-			return;
-		}
+	if (password !== password2) {
+		setErr("Passwords do not match");
+		return;
+	}
 
-		const passwordError = validatePassword(password);
-		if (passwordError) {
-			setErr(passwordError);
-			return;
-		}
-		
+	const passwordError = validatePassword(password);
+	if (passwordError) {
+		setErr(passwordError);
+		return;
+	}
 
-		try {
-      		// If the username already exists, this will throw and we catch below
-			const usernameDoc = await getDoc(doc(firebaseDb, "usernames", username));
-			if (usernameDoc.exists()) {
-				setErr("Username is already taken.");
-				return;
+	try {
+		const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+		const { uid } = userCredentials.user;
+
+		await storePasswordHash(password);
+
+		await runTransaction(firebaseDb, async (tx) => {
+			const ref = doc(firebaseDb, "usernames", username);
+			const snap = await tx.get(ref);
+			if (snap.exists()) {
+				throw new Error("Username is already taken.");
 			}
-			const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+			tx.set(ref, { uid });
+		});
 
-			const { uid } = userCredentials.user;
-			await storePasswordHash(password);
+		const userData: UserData = {
+			username,
+			email,
+			createdAt: serverTimestamp() as Timestamp,
+		};
+		await setDoc(doc(firebaseDb, "users", uid), userData);
 
-			const userData: UserData = {
-				username,
-				email,
-				createdAt: serverTimestamp() as Timestamp,
-			};
-			await setDoc(doc(firebaseDb, "users", uid), userData);
-			await setDoc(doc(firebaseDb, "usernames", username), {uid});
-			await sendEmailVerification(userCredentials.user);
-			setUsername("");
-			setEmail("");
-			setPassword("");
-			setPassword2("");
-			setOk("Sign up complete! Please check your email to verify your account.");
+		// Send email verification
+		await sendEmailVerification(userCredentials.user);
+
+		// Reset form
+		setUsername("");
+		setEmail("");
+		setPassword("");
+		setPassword2("");
+		setOk("Sign up complete! Please check your email to verify your account.");
 		} catch (e: unknown) {
+			if (e instanceof Error && e.message === "Username is already taken.") {
+				setErr("Username is taken, choose another.");
+				
+			}
+			else{
 			let message = "Something went wrong.";
 			let code: string | undefined;
 			if (typeof e === "object" && e !== null && "message" in e && "code" in e) {
@@ -98,6 +108,7 @@ export function SingUpFrom() {
 			}
 
 			setErr(message);
+		}
 		}
 	}
 
