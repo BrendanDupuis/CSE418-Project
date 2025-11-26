@@ -46,13 +46,16 @@ export function SingUpFrom() {
 		return;
 	}
 	const q = query(collection(firebaseDb, "users"), where("username", "==", username));
-		const existing = await getDocs(q);
-		if (!existing.empty) {
+	const existing = await getDocs(q);
+	if (!existing.empty) {
 			setErr("Username is already taken.");
 			return;
-		}
+	}
 	try {
-		
+		setUsername("");
+		setEmail("");
+		setPassword("");
+		setPassword2("");
 		const userCredentials = await createUserWithEmailAndPassword(firebaseAuth, email, password);
 		const { uid } = userCredentials.user;
 
@@ -67,11 +70,6 @@ export function SingUpFrom() {
 		await setDoc(doc(firebaseDb, "users", uid), userData);
 
 		await sendEmailVerification(userCredentials.user);
-
-		setUsername("");
-		setEmail("");
-		setPassword("");
-		setPassword2("");
 		setOk("Sign up complete! Please check your email to verify your account.");
 		} catch (e: unknown) {
 			if (e instanceof Error && e.message === "Username is already taken.") {
