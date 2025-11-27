@@ -1,6 +1,6 @@
 "use client";
 
-import { sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth } from "@/lib/firebase";
@@ -19,7 +19,6 @@ export function LoginForm({ onSuccess }: Props) {
 	const [err, setErr] = useState<string | null>(null);
 	const [ok, setOk] = useState<string | null>(null);
 	const [showResend, setShowResend] = useState(false);
-	const [showForgotPassword, setShowForgotPassword] = useState(false);
 
 	//2FA related states
 	const [needs2FA, setNeeds2FA] = useState(false);
@@ -108,33 +107,6 @@ export function LoginForm({ onSuccess }: Props) {
 		}
 	}
 
-	async function handleForgotPassword() {
-		if (!email) {
-			setErr("Please enter your email address first.");
-			return;
-		}
-
-		try {
-			await sendPasswordResetEmail(firebaseAuth, email);
-			setOk("Password reset email sent! Check your inbox.");
-			setShowForgotPassword(false);
-		} catch (e: unknown) {
-			let message = "Failed to send password reset email.";
-			if (typeof e === "object" && e !== null && "code" in e) {
-				const errObj = e as { code?: string };
-				switch (errObj.code) {
-					case "auth/user-not-found":
-						message = "No account found with this email address.";
-						break;
-					case "auth/invalid-email":
-						message = "Invalid email address.";
-						break;
-				}
-			}
-			setErr(message);
-		}
-	}
-
 	async function handleResendCode() {
 		if (!userId) return;
 
@@ -212,9 +184,6 @@ export function LoginForm({ onSuccess }: Props) {
 				<button type="submit" style={primaryButton}>
 					Sign in
 				</button>
-				<button type="button" style={linkButton} onClick={() => setShowForgotPassword(!showForgotPassword)}>
-					Forgot password?
-				</button>
 			</div>
 
 			{showResend && (
@@ -222,35 +191,6 @@ export function LoginForm({ onSuccess }: Props) {
 					<button type="button" onClick={handleResendVerification} style={linkButton}>
 						Resend verification email
 					</button>
-				</div>
-			)}
-
-			{showForgotPassword && (
-				<div
-					style={{
-						marginTop: 8,
-						padding: 12,
-						border: "1px solid #e5e7eb",
-						borderRadius: 8,
-					}}
-				>
-					<p
-						style={{
-							margin: "0 0 8px 0",
-							fontSize: "0.875rem",
-							color: "#6b7280",
-						}}
-					>
-						Enter your email address to receive a password reset link.
-					</p>
-					<div style={{ display: "flex", gap: 8 }}>
-						<button type="button" onClick={handleForgotPassword} style={primaryButton}>
-							Send reset email
-						</button>
-						<button type="button" onClick={() => setShowForgotPassword(false)} style={linkButton}>
-							Cancel
-						</button>
-					</div>
 				</div>
 			)}
 

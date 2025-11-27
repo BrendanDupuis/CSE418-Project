@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, Timestamp } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, Timestamp, updateDoc } from "firebase/firestore";
 import { firebaseDb } from "@/lib/firebase";
 
 export interface ChatKey {
@@ -47,14 +47,12 @@ export async function storeChatPrivateKey(chatId: string, userId: string, encryp
 	const docSnap = await getDoc(docRef);
 
 	if (docSnap.exists()) {
-		await setDoc(
-			docRef,
-			{
-				encryptedPrivateKey,
-				updatedAt: now,
-			},
-			{ merge: true },
-		);
+		// Use updateDoc for existing documents to only update allowed fields
+		// This ensures we don't violate the Firestore rule that requires hasOnly(['encryptedPrivateKey', 'updatedAt'])
+		await updateDoc(docRef, {
+			encryptedPrivateKey,
+			updatedAt: now,
+		});
 	} else {
 		await setDoc(docRef, {
 			userId,

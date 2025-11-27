@@ -53,7 +53,20 @@ export async function getUserChatIds(userId: string): Promise<string[]> {
 		return chatIds;
 	} catch (error) {
 		console.error("Error getting user chat IDs:", error);
-		return [];
+
+		// Check if it's a permissions error
+		if (error && typeof error === "object" && "code" in error) {
+			const firebaseError = error as { code?: string; message?: string };
+			if (firebaseError.code === "permission-denied" || firebaseError.message?.includes("permission")) {
+				throw new Error(`Permission denied: Unable to access chat list. Please ensure you are authenticated with 2FA verification.`);
+			}
+		}
+
+		// Re-throw with more context for debugging
+		if (error instanceof Error) {
+			throw new Error(`Failed to get user chat IDs: ${error.message}`);
+		}
+		throw error;
 	}
 }
 

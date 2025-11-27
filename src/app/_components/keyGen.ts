@@ -1,3 +1,7 @@
+import { getChatPrivateKey as getChatPrivateKeyFromDB, getChatPublicKey as getChatPublicKeyFromDB, storeChatPrivateKey, storeChatPublicKey } from "@/lib/models/chatKey";
+import { getUserChatIds } from "@/lib/models/user";
+import { hashPassword } from "@/lib/password-hash";
+
 interface ChatKeys {
 	privateKey: CryptoKey;
 	publicKey: CryptoKey;
@@ -64,8 +68,6 @@ async function decryptPrivateKeyWithAES(encryptedData: ArrayBuffer, password: st
 	return JSON.parse(privateKeyString) as JsonWebKey;
 }
 
-import { getChatPrivateKey as getChatPrivateKeyFromDB, getChatPublicKey as getChatPublicKeyFromDB, storeChatPrivateKey, storeChatPublicKey } from "@/lib/models/chatKey";
-
 export async function storeChatKeys(chatId: string, userId: string, chatKeys: ChatKeys): Promise<void> {
 	const base64EncryptedPrivateKey = btoa(String.fromCharCode(...new Uint8Array(chatKeys.encryptedPrivateKey)));
 
@@ -119,48 +121,98 @@ export async function getChatPrivateKey(chatId: string, userId: string, password
 	}
 }
 
-export async function reencryptAllChatKeys(userId: string, oldPassword: string, newPassword: string): Promise<{ success: number; failed: number; errors: string[] }> {
-	const { getUserChatIds } = await import("@/lib/models/user");
-	const chatIds = await getUserChatIds(userId);
+export async function reencryptAllChatKeys(
+	userId: string,
+	oldPassword: string,
+	newPassword: string,
+): Promise<{ success: number; failed: number; errors: string[]; skipped: number }> {
+	// Hash passwords before using them (getChatPrivateKey and encryptPrivateKeyWithAES expect password hashes)
+	const oldPasswordHash = await hashPassword(oldPassword);
+	const newPasswordHash = await hashPassword(newPassword);
+
+	let chatIds: string[] = [];
+	try {
+		chatIds = await getUserChatIds(userId);
+
+		// If we got an empty array, that's fine - user just has no chats
+		if (chatIds.length === 0) {
+			return {
+				success: 0,
+				failed: 0,
+				errors: [],
+				skipped: 0,
+			};
+		}
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		console.error("Failed to get user chat IDs:", error);
+
+		// Check if it's a permissions error
+		if (errorMessage.includes("permission") || errorMessage.includes("Permission denied")) {
+			// Return with a clear error message
+			return {
+				success: 0,
+				failed: 0,
+				errors: [
+					`Permission denied: Unable to access your chat list. ` +
+						`This may be because your authentication token doesn't have 2FA verification. ` +
+						`Please try logging out and logging back in, then try changing your password again.`,
+				],
+				skipped: 0,
+			};
+		}
+
+		// Return early with an error if we can't even get the chat list
+		return {
+			success: 0,
+			failed: 0,
+			errors: [`Failed to retrieve chat list: ${errorMessage}`],
+			skipped: 0,
+		};
+	}
 
 	let successCount = 0;
 	let failedCount = 0;
+	let skippedCount = 0;
 	const errors: string[] = [];
 
 	for (const chatId of chatIds) {
 		try {
-			// Get encrypted private key from DB
-			const encryptedPrivateKeyString = await getChatPrivateKeyFromDB(chatId, userId);
-			if (!encryptedPrivateKeyString) {
-				continue; // No key for this chat, skip
+			// Use getChatPrivateKey to decrypt with old password hash (reuses existing logic)
+			const privateKey = await getChatPrivateKey(chatId, userId, oldPasswordHash);
+
+			if (!privateKey) {
+				skippedCount++; // No key for this chat, skip but count it
+				continue;
 			}
 
-			// Decrypt with old password
-			const binaryString = atob(encryptedPrivateKeyString);
-			const bytes = new Uint8Array(binaryString.length);
-			for (let i = 0; i < binaryString.length; i++) {
-				bytes[i] = binaryString.charCodeAt(i);
+			// Re-encrypt with new password hash
+			const encryptedPrivateKey = await encryptPrivateKeyWithAES(privateKey, newPasswordHash, chatId);
+
+			// Store updated encrypted private key - convert ArrayBuffer to base64
+			const encryptedBytes = new Uint8Array(encryptedPrivateKey);
+			let binary = "";
+			for (let i = 0; i < encryptedBytes.length; i++) {
+				binary += String.fromCharCode(encryptedBytes[i]);
 			}
-			const encryptedPrivateKeyBuffer = bytes.buffer;
-
-			const privateKeyJWK = await decryptPrivateKeyWithAES(encryptedPrivateKeyBuffer, oldPassword, chatId);
-			const privateKey = await crypto.subtle.importKey("jwk", privateKeyJWK, { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
-
-			// Re-encrypt with new password
-			const encryptedPrivateKey = await encryptPrivateKeyWithAES(privateKey, newPassword, chatId);
-
-			// Store updated encrypted private key
-			const base64EncryptedPrivateKey = btoa(String.fromCharCode(...new Uint8Array(encryptedPrivateKey)));
+			const base64EncryptedPrivateKey = btoa(binary);
 			await storeChatPrivateKey(chatId, userId, base64EncryptedPrivateKey);
 
 			successCount++;
 		} catch (error) {
 			failedCount++;
-			const errorMessage = error instanceof Error ? error.message : String(error);
+			let errorMessage: string;
+			if (error instanceof Error) {
+				errorMessage = error.message;
+			} else if (error instanceof DOMException) {
+				errorMessage = `Decryption failed: ${error.name} - ${error.message || "The operation failed for an operation-specific reason"}`;
+			} else {
+				errorMessage = String(error);
+			}
 			errors.push(`Chat ${chatId}: ${errorMessage}`);
-			console.error(`Failed to re-encrypt keys for chat ${chatId}:`, error);
+			console.error(`[reencryptAllChatKeys] Failed to re-encrypt keys for chat ${chatId}:`, error);
 		}
 	}
 
-	return { success: successCount, failed: failedCount, errors };
+	return { success: successCount, failed: failedCount, errors, skipped: skippedCount };
 }

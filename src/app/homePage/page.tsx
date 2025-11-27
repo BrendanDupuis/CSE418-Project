@@ -1,9 +1,10 @@
 "use client";
 
-import { deleteUser, EmailAuthProvider, reauthenticateWithCredential, signOut } from "firebase/auth";
+import { deleteUser, signOut } from "firebase/auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ChangePassword } from "@/app/_components/change-password";
 import { firebaseAuth } from "@/lib/firebase";
 import { deleteAllUserChats } from "@/lib/models/chat";
 import { getUserData, markUserAsDeleted, type UserData } from "@/lib/models/user";
@@ -124,9 +125,12 @@ export default function HomePage() {
 
 				<div>
 					<h3>Account Settings</h3>
-					<button type="button" onClick={() => setShowDeleteAccount(!showDeleteAccount)}>
-						Delete Account
-					</button>
+					<div style={{ display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>
+						<ChangePassword />
+						<button type="button" onClick={() => setShowDeleteAccount(!showDeleteAccount)}>
+							Delete Account
+						</button>
+					</div>
 
 					{showDeleteAccount && (
 						<div>

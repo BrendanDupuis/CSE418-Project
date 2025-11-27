@@ -1,6 +1,7 @@
 const PASSWORD_HASH_KEY = "secure_password_hash";
 const SALT_KEY = "password_salt";
 const ITERATIONS = 100000;
+const STATIC_SALT = "STATIC SALT EVERY DEVICE THAT USER LOG-IN TO PAGE TO HAVE THE SAME ONE";
 
 export interface PasswordHashData {
 	hash: string;
@@ -9,10 +10,10 @@ export interface PasswordHashData {
 	timestamp: number;
 }
 
-async function hashPassword(password: string, salt: string, iterations: number): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
 	const encoder = new TextEncoder();
 	const passwordBuffer = encoder.encode(password);
-	const saltBuffer = encoder.encode(salt);
+	const saltBuffer = encoder.encode(STATIC_SALT);
 
 	const keyMaterial = await crypto.subtle.importKey("raw", passwordBuffer, "PBKDF2", false, ["deriveBits"]);
 
@@ -20,7 +21,7 @@ async function hashPassword(password: string, salt: string, iterations: number):
 		{
 			name: "PBKDF2",
 			salt: saltBuffer,
-			iterations: iterations,
+			iterations: ITERATIONS,
 			hash: "SHA-256",
 		},
 		keyMaterial,
@@ -35,19 +36,18 @@ export async function storePasswordHash(password: string): Promise<void> {
 		throw new Error("localStorage is not available");
 	}
 
-	const salt = "STATIC SALT EVERY DEVICE THAT USER LOG-IN TO PAGE TO HAVE THE SAME ONE";
-	const hash = await hashPassword(password, salt, ITERATIONS);
+	const hash = await hashPassword(password);
 
 	const hashData: PasswordHashData = {
 		hash,
-		salt,
+		salt: STATIC_SALT,
 		iterations: ITERATIONS,
 		timestamp: Date.now(),
 	};
 
 	try {
 		localStorage.setItem(PASSWORD_HASH_KEY, JSON.stringify(hashData));
-		localStorage.setItem(SALT_KEY, salt);
+		localStorage.setItem(SALT_KEY, STATIC_SALT);
 	} catch (error) {
 		console.error("Failed to store password hash:", error);
 		throw new Error("Failed to store password hash in localStorage");
@@ -88,6 +88,30 @@ export function clearPasswordHash(): void {
 
 	localStorage.removeItem(PASSWORD_HASH_KEY);
 	localStorage.removeItem(SALT_KEY);
+}
+
+export async function verifyPassword(password: string): Promise<boolean> {
+	if (typeof window === "undefined") {
+		throw new Error("Password verification is not available. Please log out and log back in.");
+	}
+
+	try {
+		const storedData = localStorage.getItem(PASSWORD_HASH_KEY);
+		if (!storedData) {
+			throw new Error("Password hash not found. Please log out and log back in.");
+		}
+
+		const hashData: PasswordHashData = JSON.parse(storedData);
+		const providedHash = await hashPassword(password);
+		return providedHash === hashData.hash;
+	} catch (error) {
+		// If it's already an Error with our message, re-throw it
+		if (error instanceof Error && (error.message.includes("log out") || error.message.includes("log back in"))) {
+			throw error;
+		}
+		console.error("Failed to verify password:", error);
+		throw new Error("Failed to verify password. Please log out and log back in.");
+	}
 }
 
 export function monitorPasswordHash(onHashDeleted: () => void, onHashChanged: () => void): () => void {

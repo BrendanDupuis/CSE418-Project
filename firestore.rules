@@ -75,7 +75,6 @@ service cloud.firestore {
       match /chats/{chatId} {
         allow read: if isOwner(uid) && isTwoFactorVerified();
         allow create: if isOwner(uid) && isTwoFactorVerified();
-        allow update: if false;
         allow delete: if isOwner(uid) && isTwoFactorVerified();
       }
     }
@@ -161,7 +160,6 @@ service cloud.firestore {
           && request.auth.uid == userId;
 
         allow update: if isChatParticipant(chatId) && isTwoFactorVerified()
-          && request.resource.data.keys().hasOnly(['encryptedPrivateKey', 'updatedAt'])
           && request.resource.data.encryptedPrivateKey is string
           && request.resource.data.updatedAt is timestamp
           && request.auth.uid == userId;
