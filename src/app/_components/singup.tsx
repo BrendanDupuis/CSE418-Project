@@ -1,7 +1,7 @@
 "use client";
 
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import {doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc, type Timestamp } from "firebase/firestore";
 import type React from "react";
 import { useState } from "react";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase";
@@ -63,6 +63,31 @@ export function SingUpFrom() {
 				email,
 				createdAt: serverTimestamp() as Timestamp,
 			};
+
+			// Try to create username document first to check if username is available
+			// If this fails, we can delete the Firebase Auth user to clean up
+			try {
+				await setDoc(doc(firebaseDb, "usernames", username), { userId: uid });
+			} catch (usernameError: unknown) {
+				// If username creation fails, delete the Firebase Auth user we just created
+				// and show a user-friendly error
+				try {
+					await userCredentials.user.delete();
+				} catch (deleteError) {
+					// If deletion fails, log it but continue with the error message
+					console.error("Failed to clean up user after username conflict:", deleteError);
+				}
+
+				const errorMessage = usernameError instanceof Error ? usernameError.message : String(usernameError);
+				if (errorMessage.includes("permission") || errorMessage.includes("Permission denied") || errorMessage.includes("already exists")) {
+					setErr("This username is already taken. Please choose a different one.");
+				} else {
+					setErr("Failed to create username. Please try again.");
+				}
+				return;
+			}
+
+			// Create user document after username is successfully created
 			await setDoc(doc(firebaseDb, "users", uid), userData);
 
 			await sendEmailVerification(userCredentials.user);

@@ -54,6 +54,15 @@ service cloud.firestore {
         );
     }
 
+    function usernameExists(username) {
+      return exists(/databases/$(database)/documents/usernames/$(username));
+    }
+
+    function usernameBelongsToUser(username, uid) {
+      return usernameExists(username) 
+        && get(/databases/$(database)/documents/usernames/$(username)).data.userId == uid;
+    }
+
     match /users/{uid} {
       allow read: if isSignedIn() && isTwoFactorVerified();
 
@@ -62,14 +71,15 @@ service cloud.firestore {
         && request.resource.data.username is string
         && request.resource.data.email is string
         && request.resource.data.email == request.auth.token.email
-        && request.resource.data.createdAt is timestamp;
+        && request.resource.data.createdAt is timestamp
+        && usernameBelongsToUser(request.resource.data.username, uid);
 
       allow update: if isOwner(uid) && isTwoFactorVerified()
         && request.resource.data.keys().hasOnly(['username', 'email', 'createdAt', 'deletedAt'])
         && request.resource.data.username is string
         && request.resource.data.email is string
         && request.resource.data.createdAt is timestamp
-        && (request.resource.data.deletedAt == null || request.resource.data.deletedAt is timestamp);
+        && (request.resource.data.deletedAt == null || request.resource.data.deletedAt is timestamp)
       allow delete: if false;
 
       match /chats/{chatId} {
@@ -167,6 +177,29 @@ service cloud.firestore {
         allow delete: if isChatParticipant(chatId) && isTwoFactorVerified()
           && request.auth.uid == userId;
       }
+    }
+
+    match /usernames/{username} {
+      // Only allow creating username documents when creating a user
+      // The username document should contain { userId: string }
+      // Ensure username doesn't exist OR if it exists, it must belong to this user
+      // (defensive check - username shouldn't exist on create, but this prevents conflicts)
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['userId'])
+        && request.resource.data.userId is string
+        && request.resource.data.userId == request.auth.uid
+        && (!usernameExists(username) || usernameBelongsToUser(username, request.auth.uid));
+
+      // Username updates are not allowed
+      allow update: if false;
+
+      // Allow deleting username document only if it belongs to the current user
+      // This is needed when a user deletes their account
+      allow delete: if isSignedIn() && isTwoFactorVerified()
+        && usernameBelongsToUser(username, request.auth.uid);
+
+      // Allow reading username documents to check availability
+      allow read: if isSignedIn();
     }
 
     match /verificationCodes/{userId} {
